@@ -1,0 +1,110 @@
+services:
+  api: &main_app
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    image: zentro:${ZENTRO_VERSION:-latest}
+    restart: always
+    env_file:
+      - .env
+    labels:
+      # Enables traefik for this container.
+      - traefik.enable=true
+      - traefik.http.routers.zentro.rule=Host(`${ZENTRO_TRAEFIK_HOST:-zentro.localhost}`)
+      - traefik.http.routers.zentro.entrypoints=http
+      - traefik.http.routers.zentro.service=zentro
+      - traefik.http.services.zentro.loadbalancer.server.port=${ZENTRO_PORT:-8000}
+    networks:
+      - default
+      - traefik-shared
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rmq:
+        condition: service_healthy
+    environment:
+      ZENTRO_HOST: 0.0.0.0
+      ZENTRO_DB_HOST: zentro-db
+      ZENTRO_DB_PORT: 5432
+      ZENTRO_DB_USER: zentro
+      ZENTRO_DB_PASS: zentro
+      ZENTRO_DB_BASE: zentro
+      ZENTRO_RABBIT_HOST: zentro-rmq
+      ZENTRO_REDIS_HOST: zentro-redis
+
+  taskiq-worker:
+    <<: *main_app
+    labels: []
+    command:
+      - taskiq
+      - worker
+      - zentro.tkq:broker
+
+  db:
+    image: postgres:16.3-bullseye
+    hostname: zentro-db
+    environment:
+      POSTGRES_PASSWORD: "zentro"
+      POSTGRES_USER: "zentro"
+      POSTGRES_DB: "zentro"
+    volumes:
+      - zentro-db-data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: pg_isready -U zentro
+      interval: 2s
+      timeout: 3s
+      retries: 40
+
+  migrator:
+    image: zentro:${ZENTRO_VERSION:-latest}
+    restart: "no"
+    command: alembic upgrade head
+    environment:
+      ZENTRO_DB_HOST: zentro-db
+      ZENTRO_DB_PORT: 5432
+      ZENTRO_DB_USER: zentro
+      ZENTRO_DB_PASS: zentro
+      ZENTRO_DB_BASE: zentro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  redis:
+    image: bitnami/redis:6.2.5
+    hostname: "zentro-redis"
+    restart: always
+    environment:
+      ALLOW_EMPTY_PASSWORD: "yes"
+    healthcheck:
+      test: redis-cli ping
+      interval: 1s
+      timeout: 3s
+      retries: 50
+
+  rmq:
+    image: rabbitmq:3.9.16-alpine
+    hostname: "zentro-rmq"
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: "guest"
+      RABBITMQ_DEFAULT_PASS: "guest"
+      RABBITMQ_DEFAULT_VHOST: "/"
+    healthcheck:
+      test: rabbitmq-diagnostics check_running -q
+      interval: 3s
+      timeout: 3s
+      retries: 50
+
+
+
+volumes:
+  zentro-db-data:
+    name: zentro-db-data
+
+networks:
+  # Network for traefik.
+  traefik-shared:
+    name: traefik-shared
