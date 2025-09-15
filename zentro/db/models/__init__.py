@@ -24,12 +24,12 @@ def load_all_models() -> None:
     # Load models from other app modules
     project_root = Path(__file__).resolve().parent.parent.parent
     for app in app_names:
-        app_models_path = project_root / app / "models"
+        app_models_path = project_root / app
         print(f"app models path is {app_models_path}")
         if app_models_path.exists():
             for module_info in pkgutil.walk_packages(
                 path=[str(app_models_path)],
-                prefix=f"zentro.{app}.models.",
+                prefix=f"zentro.{app}.",
             ):
                 if not module_info.name.endswith('__init__'):
                     __import__(module_info.name)

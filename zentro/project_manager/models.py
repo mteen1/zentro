@@ -1,4 +1,4 @@
-# zentro/project_manager/project.py
+# zentro/project_manager/models.py
 from __future__ import annotations
 from datetime import date
 from typing import List, Optional
@@ -76,7 +76,6 @@ class Epic(Base):
     color: Mapped[Optional[str]] = mapped_column(String(7))  # hex color
     start_date: Mapped[Optional[date]] = mapped_column(Date)
     end_date: Mapped[Optional[date]] = mapped_column(Date)
-    status: Mapped[TaskStatus] = mapped_column(SQLEnum(TaskStatus), default=TaskStatus.TODO, nullable=False)
 
     project: Relationship[Project] = relationship("Project", back_populates="epics")
     tasks: Relationship[List["Task"]] = relationship("Task", back_populates="epic")
@@ -98,7 +97,6 @@ class Sprint(Base):
     tasks: Relationship[List["Task"]] = relationship("Task", back_populates="sprint")
 
 
-# --- task ---
 class Task(Base):
     __tablename__ = "tasks"
 
