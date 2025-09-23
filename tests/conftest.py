@@ -1,34 +1,30 @@
-import asyncio
-import sys
 import uuid
-from asyncio.events import AbstractEventLoop
-from typing import Any, AsyncGenerator, Generator
+from typing import Any, AsyncGenerator
 from unittest.mock import Mock
 
 import pytest
-from fastapi import FastAPI
-from httpx import AsyncClient
-from fakeredis import FakeServer
-from fakeredis.aioredis import FakeConnection
-from redis.asyncio import ConnectionPool
-from zentro.services.redis.dependency import get_redis_pool
 from aio_pika import Channel
 from aio_pika.abc import AbstractExchange, AbstractQueue
 from aio_pika.pool import Pool
-from zentro.services.rabbit.dependencies import get_rmq_channel_pool
-from zentro.services.rabbit.lifespan import init_rabbit, shutdown_rabbit
-
-from zentro.settings import settings
-from zentro.web.application import get_app
+from fakeredis import FakeServer
+from fakeredis.aioredis import FakeConnection
+from fastapi import FastAPI
+from httpx import AsyncClient
+from redis.asyncio import ConnectionPool
 from sqlalchemy.ext.asyncio import (
-    AsyncConnection,
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+
 from zentro.db.dependencies import get_db_session
 from zentro.db.utils import create_database, drop_database
+from zentro.services.rabbit.dependencies import get_rmq_channel_pool
+from zentro.services.rabbit.lifespan import init_rabbit, shutdown_rabbit
+from zentro.services.redis.dependency import get_redis_pool
+from zentro.settings import settings
+from zentro.web.application import get_app
 
 
 @pytest.fixture(scope="session")
@@ -48,8 +44,8 @@ async def _engine() -> AsyncGenerator[AsyncEngine, None]:
 
     :yield: new engine.
     """
-    from zentro.db.meta import meta  # noqa: WPS433
-    from zentro.db.models import load_all_models  # noqa: WPS433
+    from zentro.db.meta import meta
+    from zentro.db.models import load_all_models
 
     load_all_models()
 
@@ -207,12 +203,13 @@ def fastapi_app(
     application.dependency_overrides[get_db_session] = lambda: dbsession
     application.dependency_overrides[get_redis_pool] = lambda: fake_redis_pool
     application.dependency_overrides[get_rmq_channel_pool] = lambda: test_rmq_pool
-    return application  # noqa: RET504
+    return application
 
 
 @pytest.fixture
 async def client(
-    fastapi_app: FastAPI, anyio_backend: Any
+    fastapi_app: FastAPI,
+    anyio_backend: Any,
 ) -> AsyncGenerator[AsyncClient, None]:
     """
     Fixture that creates client for requesting server.

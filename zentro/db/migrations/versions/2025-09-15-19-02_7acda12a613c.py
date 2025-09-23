@@ -11,13 +11,18 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 task_status_enum = postgresql.ENUM(
-    "TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "BLOCKED",
-    name="taskstatus", create_type=False
+    "DRAFT",
+    "TODO",
+    "IN_PROGRESS",
+    "IN_REVIEW",
+    "DONE",
+    "BLOCKED",
+    name="taskstatus",
+    create_type=False,
 )
 
 priority_enum = postgresql.ENUM(
-    "LOW", "MEDIUM", "HIGH", "CRITICAL", "BLOCKER",
-    name="priority", create_type=False
+    "LOW", "MEDIUM", "HIGH", "CRITICAL", "BLOCKER", name="priority", create_type=False
 )
 
 # revision identifiers, used by Alembic.
@@ -153,7 +158,10 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        op.f("ix_sprints_project_id"), "sprints", ["project_id"], unique=False,
+        op.f("ix_sprints_project_id"),
+        "sprints",
+        ["project_id"],
+        unique=False,
     )
     op.create_table(
         "tasks",
@@ -165,10 +173,13 @@ def upgrade() -> None:
         sa.Column("title", sa.String(length=300), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column(
-            "status",task_status_enum,nullable=False,
+            "status",
+            task_status_enum,
+            nullable=False,
         ),
         sa.Column(
-            "priority", priority_enum,
+            "priority",
+            priority_enum,
             nullable=False,
         ),
         sa.Column("estimate", sa.Float(), nullable=True),

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from redis.asyncio import ConnectionPool
+
 from zentro.settings import settings
 
 

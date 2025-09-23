@@ -12,10 +12,10 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">3.9.1,<4"
-fastapi = "^0.115.6"
+fastapi = {extras = ["standard"], version = "^0.116.1"}
 uvicorn = { version = "^0.34.0", extras = ["standard"] }
 gunicorn = "^23.0.0"
-pydantic = "^2.10.4"
+pydantic = {extras = ["email"], version = "^2.11.9"}
 pydantic-settings = "^2.7.0"
 yarl = "^1.18.3"
 ujson = "^5.10.0"
@@ -42,6 +42,9 @@ taskiq = "^0.11.10"
 taskiq-fastapi = "^0.3.3"
     taskiq-redis = "^1.0.2"
     taskiq-aio-pika = "^0.4.1"
+langchain = "^0.3.27"
+langchain-google-genai = "^2.1.12"
+loguru = "^0.7.3"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -143,7 +146,7 @@ lint.ignore = [
 ]
 exclude = [
     "zentro/db/migrations",
-    ".venv/"
+    ".venv/",
 ]
 lint.mccabe = { max-complexity = 10 }
 line-length = 88
@@ -151,6 +154,10 @@ line-length = 88
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = [
     "S101", # Use of assert detected
+]
+"endpoints.py" = [
+        "ANN001", # Missing type annotation for function arguments
+    "ANN201", # Missing return type annotation
 ]
 
 [tool.ruff.lint.pydocstyle]

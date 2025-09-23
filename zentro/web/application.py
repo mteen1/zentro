@@ -1,16 +1,16 @@
 import logging
-
-from fastapi import FastAPI
-from fastapi.responses import UJSONResponse
-from zentro.settings import settings
-from zentro.web.api.router import api_router
 from importlib import metadata
 
-from zentro.web.lifespan import lifespan_setup
 import sentry_sdk
+from fastapi import FastAPI
+from fastapi.responses import UJSONResponse
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+from zentro.settings import settings
+from zentro.web.api.router import api_router
+from zentro.web.lifespan import lifespan_setup
 
 
 def get_app() -> FastAPI:

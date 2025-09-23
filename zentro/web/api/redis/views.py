@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from fastapi.param_functions import Depends
 from redis.asyncio import ConnectionPool, Redis
+
 from zentro.services.redis.dependency import get_redis_pool
 from zentro.web.api.redis.schema import RedisValueDTO
 

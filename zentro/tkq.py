@@ -1,9 +1,11 @@
 from typing import Any
+
 import taskiq_fastapi
-from taskiq import InMemoryBroker, ZeroMQBroker, AsyncBroker, AsyncResultBackend
-from zentro.settings import settings
-from taskiq_redis import ListQueueBroker, RedisAsyncResultBackend
+from taskiq import AsyncBroker, AsyncResultBackend, InMemoryBroker
 from taskiq_aio_pika import AioPikaBroker
+from taskiq_redis import RedisAsyncResultBackend
+
+from zentro.settings import settings
 
 result_backend: AsyncResultBackend[Any] = RedisAsyncResultBackend(
     redis_url=str(settings.redis_url.with_path("/1")),

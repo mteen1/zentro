@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+
 from zentro.web.api.echo.schema import Message
 
 router = APIRouter()
