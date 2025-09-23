@@ -1,13 +1,12 @@
 import uuid
-from typing import Any
 
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
+
 from zentro.db.dao.dummy_dao import DummyDAO
-from zentro.db.models.dummy_model import DummyModel
 
 
 @pytest.mark.anyio

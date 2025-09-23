@@ -1,17 +1,15 @@
-import os
 import enum
 from pathlib import Path
 from tempfile import gettempdir
-from typing import List, Optional
+from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 from yarl import URL
 
 TEMP_DIR = Path(gettempdir())
 
 
-class LogLevel(str, enum.Enum):  # noqa: WPS600
+class LogLevel(str, enum.Enum):
     """Possible log levels."""
 
     NOTSET = "NOTSET"
@@ -42,11 +40,11 @@ class Settings(BaseSettings):
 
     log_level: LogLevel = LogLevel.INFO
     # Variables for the database
-    db_host: str = "localhost"
+    db_host: str = "127.0.0.1"
     db_port: int = 5432
     db_user: str = "zentro"
     db_pass: str = "zentro"
-    db_base: str = "admin"
+    db_base: str = "zentro"
     db_echo: bool = False
 
     # Variables for Redis
@@ -77,6 +75,8 @@ class Settings(BaseSettings):
     # Grpc endpoint for opentelemetry.
     # E.G. http://localhost:4317
     opentelemetry_endpoint: Optional[str] = None
+
+    gemini_api_key: Optional[str] = None
 
     @property
     def db_url(self) -> URL:

@@ -1,17 +1,14 @@
 import logging
-from typing import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 from fastapi import FastAPI
-from zentro.settings import settings
-from prometheus_fastapi_instrumentator.instrumentation import (
-    PrometheusFastApiInstrumentator,
-)
-from zentro.services.redis.lifespan import init_redis, shutdown_redis
-from zentro.services.rabbit.lifespan import init_rabbit, shutdown_rabbit
-from zentro.tkq import broker
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
+from opentelemetry.instrumentation.redis import RedisInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.resources import (
     DEPLOYMENT_ENVIRONMENT,
     SERVICE_NAME,
@@ -21,12 +18,15 @@ from opentelemetry.sdk.resources import (
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import set_tracer_provider
-from opentelemetry.instrumentation.redis import RedisInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
-from opentelemetry.instrumentation.logging import LoggingInstrumentor
+from prometheus_fastapi_instrumentator.instrumentation import (
+    PrometheusFastApiInstrumentator,
+)
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.orm import sessionmaker
+
+from zentro.services.rabbit.lifespan import init_rabbit, shutdown_rabbit
+from zentro.services.redis.lifespan import init_redis, shutdown_redis
+from zentro.settings import settings
+from zentro.tkq import broker
 
 
 def _setup_db(app: FastAPI) -> None:  # pragma: no cover
@@ -63,8 +63,8 @@ def setup_opentelemetry(app: FastAPI) -> None:  # pragma: no cover
                 SERVICE_NAME: "zentro",
                 TELEMETRY_SDK_LANGUAGE: "python",
                 DEPLOYMENT_ENVIRONMENT: settings.environment,
-            }
-        )
+            },
+        ),
     )
 
     tracer_provider.add_span_processor(
@@ -72,8 +72,8 @@ def setup_opentelemetry(app: FastAPI) -> None:  # pragma: no cover
             OTLPSpanExporter(
                 endpoint=settings.opentelemetry_endpoint,
                 insecure=True,
-            )
-        )
+            ),
+        ),
     )
 
     excluded_endpoints = [

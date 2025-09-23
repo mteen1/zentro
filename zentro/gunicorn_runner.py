@@ -5,9 +5,9 @@ from gunicorn.util import import_app
 from uvicorn.workers import UvicornWorker as BaseUvicornWorker
 
 try:
-    import uvloop  # noqa: WPS433 (Found nested import)
+    import uvloop  # (Found nested import)
 except ImportError:
-    uvloop = None  # type: ignore  # noqa: WPS440 (variables overlap)
+    uvloop = None  # type: ignore  # (variables overlap)
 
 
 class UvicornWorker(BaseUvicornWorker):
@@ -36,7 +36,7 @@ class GunicornApplication(BaseApplication):
     with custom uvicorn workers.
     """
 
-    def __init__(  # noqa: WPS211 (Too many args)
+    def __init__(  # (Too many args)
         self,
         app: str,
         host: str,

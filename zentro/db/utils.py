@@ -1,10 +1,7 @@
-import os
-
 from sqlalchemy import text
-from sqlalchemy.engine import URL, make_url
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-from pathlib import Path
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine
+
 from zentro.settings import settings
 
 
@@ -16,19 +13,19 @@ async def create_database() -> None:
     async with engine.connect() as conn:
         database_existance = await conn.execute(
             text(
-                f"SELECT 1 FROM pg_database WHERE datname='{settings.db_base}'",  # noqa: E501, S608
-            )
+                f"SELECT 1 FROM pg_database WHERE datname='{settings.db_base}'",  # noqa: S608
+            ),
         )
         database_exists = database_existance.scalar() == 1
 
     if database_exists:
         await drop_database()
 
-    async with engine.connect() as conn:  # noqa: WPS440
+    async with engine.connect() as conn:
         await conn.execute(
             text(
                 f'CREATE DATABASE "{settings.db_base}" ENCODING "utf8" TEMPLATE template1',  # noqa: E501
-            )
+            ),
         )
 
 
