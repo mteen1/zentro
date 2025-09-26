@@ -1,7 +1,7 @@
 import enum
 from pathlib import Path
 from tempfile import gettempdir
-from typing import Optional
+from typing import List, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from yarl import URL
@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     environment: str = "dev"
 
     log_level: LogLevel = LogLevel.INFO
+
+    app_names: List[str] = ["db", "project_manager", "intelligence_manager"]
+
     # Variables for the database
     db_host: str = "127.0.0.1"
     db_port: int = 5432

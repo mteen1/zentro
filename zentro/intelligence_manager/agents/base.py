@@ -14,11 +14,10 @@ from zentro.settings import Settings
 configure_logging()
 
 settings = Settings()
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 DEFAULT_LLM = ChatGoogleGenerativeAI(
     model="gemini-2.0-flash",
-    google_api_key=GEMINI_API_KEY,
+    google_api_key=settings.gemini_api_key,
 )
 
 
