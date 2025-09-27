@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
@@ -8,19 +8,39 @@ from pydantic import BaseModel, EmailStr, Field
 from zentro.project_manager.enums import Priority, TaskStatus
 
 
-class UserCreate(BaseModel):
+class UserBase(BaseModel):
     email: EmailStr
     username: Optional[str] = None
     full_name: Optional[str] = None
-    active: bool = True
+    active: Optional[bool] = True
 
 
-class UserOut(BaseModel):
-    id: int
+
+class UserCreate(UserBase):
+    password: str
+
+class UserLogin(BaseModel):
     email: EmailStr
-    username: Optional[str]
-    full_name: Optional[str]
-    active: bool
+    password: str
+
+class UserOut(UserBase):
+    id: int
+    is_verified: bool
+    last_login: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
+
+
+class Token(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    sub: str
+    rtp: int
+
 
     class Config:
         orm_mode = True

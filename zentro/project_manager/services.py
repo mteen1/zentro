@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+import random
 from typing import List, Optional, Sequence, Tuple
 
 from sqlalchemy import func, select, update
@@ -8,9 +9,28 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from zentro.project_manager import security
 from zentro.project_manager.enums import Priority, TaskStatus
 from zentro.project_manager.models import Epic, Project, Sprint, Task, User
 from zentro.project_manager.utils import Conflict, NotFound, _get_or_404
+
+
+
+
+# ---- Authentication ----
+async def authenticate_user(
+    session: AsyncSession, email: str, password: str
+) -> Optional[User]:
+    """
+    Authenticate a user by email and password.
+    Returns the user object if authentication is successful, otherwise None.
+    """
+    user = await get_user_by_email(session, email)
+    if not user or not user.password_hash:
+        return None
+    if not security.verify_password(password, str(user.password_hash)):
+        return None
+    return user
 
 
 # ---- Users ----
@@ -18,16 +38,25 @@ async def create_user(
     session: AsyncSession,
     *,
     email: str,
+    password: str, # Add password to the signature
     username: Optional[str] = None,
     full_name: Optional[str] = None,
     active: bool = True,
 ) -> User:
-    user = User(email=email, username=username, full_name=full_name, active=active)
+    """Creates a new user with a hashed password."""
+    hashed_password = security.get_password_hash(password)
+    user = User(
+        email=email,
+        password_hash=hashed_password,
+        username=username,
+        full_name=full_name,
+        active=active,
+        refresh_token_param=random.randint(1, 1_000_000_000) # Initialize rtp
+    )
     session.add(user)
     try:
         await session.flush()  # push so integrity errors surface
     except IntegrityError as exc:
-        # unique constraint on email/username
         raise Conflict("email or username already exists") from exc
     await session.refresh(user)
     return user
@@ -44,10 +73,22 @@ async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]
 
 
 async def update_user(session: AsyncSession, user_id: int, **patch) -> User:
+    """Updates a user. Hashes the password if it's being changed."""
     user = await _get_or_404(session, User, user_id)
     for k, v in patch.items():
         if hasattr(user, k):
-            setattr(user, k, v)
+            if k == "password" and v is not None:
+                # Special handling for password update
+                setattr(user, "password_hash", security.get_password_hash(v))
+                # When password changes, invalidate old refresh tokens
+                setattr(user, "refresh_token_param", user.refresh_token_param + 1)
+            else:
+                setattr(user, k, v)
+
+    # Update last_login on successful login
+    if "last_login" in patch:
+        user.last_login = patch["last_login"]
+
     session.add(user)
     await session.flush()
     await session.refresh(user)
@@ -59,8 +100,6 @@ async def delete_user(session: AsyncSession, user_id: int) -> None:
     user = await _get_or_404(session, User, user_id)
     await session.delete(user)
     await session.flush()
-
-
 # ---- Projects ----
 async def create_project(
     session: AsyncSession,

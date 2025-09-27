@@ -3,7 +3,7 @@
 import pkgutil
 from pathlib import Path
 
-app_names = ["db", "project_manager", "intelligence_manager"]
+from zentro.settings import settings
 
 
 def load_all_models() -> None:
@@ -18,7 +18,7 @@ def load_all_models() -> None:
             __import__(module_info.name)
 
     project_root = Path(__file__).resolve().parent.parent.parent
-    for app in app_names:
+    for app in settings.app_names:
         models_file = project_root / app / "models.py"
         if models_file.exists():
             module_name = f"zentro.{app}.models"

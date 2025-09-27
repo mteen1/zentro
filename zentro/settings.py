@@ -81,6 +81,8 @@ class Settings(BaseSettings):
 
     gemini_api_key: Optional[str] = None
 
+    secret_key: str = "Hi"
+
     @property
     def db_url(self) -> URL:
         """
