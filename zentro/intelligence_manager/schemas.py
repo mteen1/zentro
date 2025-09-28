@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-from zentro.intelligence_manager.models import FollowUpStatus
+from zentro.intelligence_manager.enums import FollowUpStatus
 from zentro.project_manager.schemas import UserOut
 
 

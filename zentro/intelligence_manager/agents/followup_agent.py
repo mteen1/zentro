@@ -6,7 +6,8 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from zentro.intelligence_manager.agents import DEFAULT_LLM, BaseAgent
-from zentro.intelligence_manager.models import FollowUpStatus, TaskFollowUp
+from zentro.intelligence_manager.models import TaskFollowUp
+from zentro.intelligence_manager.enums import FollowUpStatus
 from zentro.log import configure_logging
 from zentro.project_manager.models import Task, User
 from zentro.project_manager.services import get_tasks_past_due_date
