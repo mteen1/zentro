@@ -45,6 +45,8 @@ taskiq-fastapi = "^0.3.3"
 langchain = "^0.3.27"
 langchain-google-genai = "^2.1.12"
 loguru = "^0.7.3"
+passlib = "^1.7.4"
+python-jose = {extras = ["cryptography"], version = "^3.5.0"}
 
 
 [tool.poetry.group.dev.dependencies]

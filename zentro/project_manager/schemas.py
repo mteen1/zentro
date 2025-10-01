@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
@@ -8,22 +8,42 @@ from pydantic import BaseModel, EmailStr, Field
 from zentro.project_manager.enums import Priority, TaskStatus
 
 
-class UserCreate(BaseModel):
+class UserBase(BaseModel):
     email: EmailStr
     username: Optional[str] = None
     full_name: Optional[str] = None
-    active: bool = True
+    active: Optional[bool] = True
 
 
-class UserOut(BaseModel):
-    id: int
+
+class UserCreate(UserBase):
+    password: str
+
+class UserLogin(BaseModel):
     email: EmailStr
-    username: Optional[str]
-    full_name: Optional[str]
-    active: bool
+    password: str
+
+class UserOut(UserBase):
+    id: int
+    is_verified: bool
+    last_login: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+
+class Token(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    sub: str
+    rtp: int
+
+
+    class Config:
+        from_attributes = True
 
 
 class ProjectCreate(BaseModel):
@@ -41,7 +61,7 @@ class ProjectOut(BaseModel):
     creator_id: Optional[int]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class EpicCreate(BaseModel):
@@ -61,7 +81,7 @@ class EpicOut(BaseModel):
     color: Optional[str]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class SprintCreate(BaseModel):
@@ -81,7 +101,7 @@ class SprintOut(BaseModel):
     is_active: bool
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class TaskCreate(BaseModel):
@@ -117,7 +137,7 @@ class TaskOut(BaseModel):
     due_date: Optional[date]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # -----------------------

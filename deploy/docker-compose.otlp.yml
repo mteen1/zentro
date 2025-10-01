@@ -4,6 +4,8 @@ services:
       # Adds opentelemetry endpoint.
       ZENTRO_OPENTELEMETRY_ENDPOINT: "http://otel-collector:4317"
 
+
+  # TODO: add and test elastic, and production logging
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.53.0
     volumes:

@@ -1,7 +1,7 @@
 # zentro/project_manager/models.py
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 
 from sqlalchemy import (
@@ -13,7 +13,7 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
-    Text,
+    Text, DateTime,
 )
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, Relationship, mapped_column, relationship
@@ -44,9 +44,15 @@ class User(Base):
     email: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=False, index=True,
     )
-    username: Mapped[Optional[str]] = mapped_column(
-        String(80), unique=True, nullable=True,
-    )
+
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255))
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    refresh_token_param: Mapped[int] = mapped_column(Integer, default=0,
+                                                       nullable=False)
+    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    username: Mapped[Optional[str]] = mapped_column(String(80), unique=True,
+                                                    nullable=True)
     full_name: Mapped[Optional[str]] = mapped_column(String(200))
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
