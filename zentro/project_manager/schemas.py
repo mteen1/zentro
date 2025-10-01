@@ -29,7 +29,7 @@ class UserOut(UserBase):
     last_login: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class Token(BaseModel):
@@ -43,7 +43,7 @@ class TokenData(BaseModel):
 
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ProjectCreate(BaseModel):
@@ -61,7 +61,7 @@ class ProjectOut(BaseModel):
     creator_id: Optional[int]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class EpicCreate(BaseModel):
@@ -81,7 +81,7 @@ class EpicOut(BaseModel):
     color: Optional[str]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class SprintCreate(BaseModel):
@@ -101,7 +101,7 @@ class SprintOut(BaseModel):
     is_active: bool
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class TaskCreate(BaseModel):
@@ -137,7 +137,7 @@ class TaskOut(BaseModel):
     due_date: Optional[date]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # -----------------------
