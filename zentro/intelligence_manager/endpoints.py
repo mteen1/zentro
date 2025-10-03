@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from functools import wraps
+from typing import List, Optional, cast, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,16 +17,9 @@ from zentro.intelligence_manager.schemas import (
     TaskFollowUpOut,
     TaskFollowUpUpdate,
 )
-from zentro.project_manager.utils import Conflict, NotFound, ServiceError
 
-router = APIRouter()
-
-
-from functools import wraps
-from typing import Any, Callable, TypeVar, cast
-
-F = TypeVar("F", bound=Callable[..., Any])
-
+from zentro.utils import Conflict, NotFound, ServiceError, F
+from fastapi import HTTPException, status
 
 def translate_service_errors(fn: F) -> F:
     """
@@ -47,6 +41,7 @@ def translate_service_errors(fn: F) -> F:
 
     return cast(F, wrapper)
 
+router = APIRouter()
 
 # -----------------------
 # Task Follow-up endpoints

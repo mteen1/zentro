@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from zentro.intelligence_manager.agents.followup_agent import TaskFollowUpAgent
 from zentro.intelligence_manager.models import FollowUpStatus, TaskFollowUp
 from zentro.project_manager.models import Task, User
-from zentro.project_manager.utils import NotFound, _get_or_404
+from zentro.utils import NotFound, _get_or_404
 
 
 # ---- Task Follow-ups ----

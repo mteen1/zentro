@@ -1,4 +1,7 @@
-# ---- Custom exceptions ----
+from functools import wraps
+from typing import TypeVar, Callable, Any, cast
+
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -20,3 +23,8 @@ async def _get_or_404(session: AsyncSession, model, pk: int):
     if obj is None:
         raise NotFound(f"{model.__name__} with id={pk} not found")
     return obj
+
+
+
+F = TypeVar("F", bound=Callable[..., Any])
+

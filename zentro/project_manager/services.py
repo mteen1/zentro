@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from zentro.project_manager import security
 from zentro.project_manager.enums import Priority, TaskStatus
 from zentro.project_manager.models import Epic, Project, Sprint, Task, User
-from zentro.project_manager.utils import Conflict, NotFound, _get_or_404
+from zentro.utils import Conflict, NotFound, _get_or_404
 
 
 
@@ -96,7 +96,7 @@ async def update_user(session: AsyncSession, user_id: int, **patch) -> User:
 
 
 async def delete_user(session: AsyncSession, user_id: int) -> None:
-    # hard delete — adapt to soft delete if you prefer
+    # hard delete — adapt to softly delete if you prefer
     user = await _get_or_404(session, User, user_id)
     await session.delete(user)
     await session.flush()
