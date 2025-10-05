@@ -1,4 +1,3 @@
-# zentro/project_manager/models.py
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -19,13 +18,14 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, Relationship, mapped_column, relationship
 
 from zentro.db.base import Base
-from zentro.project_manager.enums import Priority, TaskStatus
+from zentro.project_manager.enums import Priority, TaskStatus, UserRole, ProjectRole
 
 project_users = Table(
     "project_users",
     Base.metadata,
     Column("project_id", Integer, ForeignKey("projects.id"), primary_key=True),
     Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("role", SQLEnum(ProjectRole), default=ProjectRole.DEVELOPER, nullable=False),
 )
 
 task_assignees = Table(
@@ -55,6 +55,11 @@ class User(Base):
                                                     nullable=True)
     full_name: Mapped[Optional[str]] = mapped_column(String(200))
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Global role for system-wide permissions
+    role: Mapped[UserRole] = mapped_column(
+        SQLEnum(UserRole), default=UserRole.USER, nullable=False, index=True
+    )
 
     # relationships
     projects: Relationship[List["Project"]] = relationship(

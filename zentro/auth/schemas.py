@@ -16,7 +16,6 @@ class UserCreate(UserBase):
     password: str
 
 class UserOut(UserBase):
-    id: int
     is_verified: bool
     last_login: Optional[datetime] = None
 

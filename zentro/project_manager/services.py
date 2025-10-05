@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date
 import random
 from typing import List, Optional, Sequence, Tuple
 
@@ -10,11 +10,171 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from zentro.project_manager import security
-from zentro.project_manager.enums import Priority, TaskStatus
-from zentro.project_manager.models import Epic, Project, Sprint, Task, User
-from zentro.utils import Conflict, NotFound, _get_or_404
+from zentro.project_manager.enums import Priority, TaskStatus, ProjectRole, UserRole
+from zentro.project_manager.models import Task, User, Project, project_users, Sprint, Epic
+
+from zentro.utils import NotFound, _get_or_404, Conflict
 
 
+async def add_user_to_project(
+    session: AsyncSession,
+    project_id: int,
+    user_id: int,
+    role: ProjectRole = ProjectRole.DEVELOPER,
+) -> None:
+    """Add a user to a project with specified role"""
+    # Verify project exists
+    project = await session.get(Project, project_id)
+    if not project:
+        raise NotFound(f"Project {project_id} not found")
+
+    # Verify user exists
+    user = await session.get(User, user_id)
+    if not user:
+        raise NotFound(f"User {user_id} not found")
+
+    # Check if user is already in project
+    stmt = select(project_users).where(
+        project_users.c.project_id == project_id,
+        project_users.c.user_id == user_id
+    )
+    result = await session.execute(stmt)
+    if result.first():
+        raise Conflict(f"User {user_id} is already in project {project_id}")
+
+    # Add user to project
+    stmt = project_users.insert().values(
+        project_id=project_id,
+        user_id=user_id,
+        role=role
+    )
+    await session.execute(stmt)
+    await session.commit()
+
+
+async def remove_user_from_project(
+    session: AsyncSession,
+    project_id: int,
+    user_id: int,
+) -> None:
+    """Remove a user from a project"""
+    stmt = project_users.delete().where(
+        project_users.c.project_id == project_id,
+        project_users.c.user_id == user_id
+    )
+    result = await session.execute(stmt)
+
+    if result.rowcount == 0:
+        raise NotFound(f"User {user_id} not found in project {project_id}")
+
+    await session.commit()
+
+
+async def update_user_project_role(
+    session: AsyncSession,
+    project_id: int,
+    user_id: int,
+    new_role: ProjectRole,
+) -> None:
+    """Update a user's role in a project"""
+    stmt = (
+        update(project_users)
+        .where(
+            project_users.c.project_id == project_id,
+            project_users.c.user_id == user_id
+        )
+        .values(role=new_role)
+    )
+    result = await session.execute(stmt)
+
+    if result.rowcount == 0:
+        raise NotFound(f"User {user_id} not found in project {project_id}")
+
+    await session.commit()
+
+
+async def update_user_global_role(
+    session: AsyncSession,
+    user_id: int,
+    new_role: UserRole,
+) -> None:
+    """Update a user's global role"""
+    user = await session.get(User, user_id)
+    if not user:
+        raise NotFound(f"User {user_id} not found")
+
+    user.role = new_role
+    await session.commit()
+
+
+async def list_projects(
+    session: AsyncSession,
+    user_id: int = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[Project]:
+    """
+    List projects. If user_id provided, only return projects the user has access to.
+    Admins see all projects.
+    """
+    if user_id:
+        user = await session.get(User, user_id)
+        if not user:
+            raise NotFound(f"User {user_id} not found")
+
+        # Admins see all projects
+        if user.role in [UserRole.SUPER_ADMIN, UserRole.ADMIN]:
+            stmt = select(Project).limit(limit).offset(offset)
+        else:
+            # Regular users only see projects they're members of
+            stmt = (
+                select(Project)
+                .join(project_users)
+                .where(project_users.c.user_id == user_id)
+                .limit(limit)
+                .offset(offset)
+            )
+    else:
+        # No user specified, return all (for admin use)
+        stmt = select(Project).limit(limit).offset(offset)
+
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def create_project(
+    session: AsyncSession,
+    name: str,
+    key: str = None,
+    description: str = None,
+    creator_id: int = None,
+) -> Project:
+    """
+    Create a project. If creator_id is provided, automatically add them
+    as PROJECT_ADMIN.
+    """
+    # Your existing project creation logic here
+    project = Project(
+        name=name,
+        key=key,
+        description=description,
+        creator_id=creator_id,
+    )
+    session.add(project)
+    await session.flush()  # Get the project ID
+
+    # Automatically add creator as PROJECT_ADMIN
+    if creator_id:
+        stmt = project_users.insert().values(
+            project_id=project.id,
+            user_id=creator_id,
+            role=ProjectRole.PROJECT_ADMIN
+        )
+        await session.execute(stmt)
+
+    await session.commit()
+    await session.refresh(project)
+    return project
 
 
 # ---- Authentication ----
@@ -100,29 +260,6 @@ async def delete_user(session: AsyncSession, user_id: int) -> None:
     user = await _get_or_404(session, User, user_id)
     await session.delete(user)
     await session.flush()
-# ---- Projects ----
-async def create_project(
-    session: AsyncSession,
-    *,
-    name: str,
-    key: Optional[str] = None,
-    description: Optional[str] = None,
-    creator_id: Optional[int] = None,
-) -> Project:
-    project = Project(
-        name=name,
-        key=key,
-        description=description,
-        creator_id=creator_id,
-    )
-    session.add(project)
-    try:
-        await session.flush()
-    except IntegrityError as exc:
-        raise Conflict("project key must be unique") from exc
-    await session.refresh(project)
-    return project
-
 
 async def get_project(
     session: AsyncSession,
@@ -149,42 +286,6 @@ async def get_project(
         return project
     return await _get_or_404(session, Project, project_id)
 
-
-async def list_projects(
-    session: AsyncSession,
-    *,
-    limit: int = 50,
-    offset: int = 0,
-) -> Sequence[Project]:
-    q = select(Project).offset(offset).limit(limit)
-    result = await session.execute(q)
-    return result.scalars().all()
-
-
-async def add_user_to_project(
-    session: AsyncSession,
-    project_id: int,
-    user_id: int,
-) -> None:
-    project = await _get_or_404(session, Project, project_id)
-    user = await _get_or_404(session, User, user_id)
-    if user not in project.users:
-        project.users.append(user)
-        session.add(project)
-        await session.flush()
-
-
-async def remove_user_from_project(
-    session: AsyncSession,
-    project_id: int,
-    user_id: int,
-) -> None:
-    project = await _get_or_404(session, Project, project_id)
-    user = await _get_or_404(session, User, user_id)
-    if user in project.users:
-        project.users.remove(user)
-        session.add(project)
-        await session.flush()
 
 
 # ---- Epics ----
@@ -213,6 +314,34 @@ async def create_epic(
     await session.refresh(epic)
     return epic
 
+async def get_epic(
+    session: AsyncSession,
+    epic_id: int,
+    /,
+    *,
+    load_relations: bool = False,
+) -> Epic:
+    """
+    Retrieve a single epic by ID.
+    If load_relations=True, eager-load related project and tasks.
+    """
+    if load_relations:
+        q = (
+            select(Epic)
+            .options(
+                selectinload(Epic.project),
+                selectinload(Epic.tasks),
+            )
+            .where(Epic.id == epic_id)
+        )
+        result = await session.execute(q)
+        epic = result.scalars().first()
+        if not epic:
+            raise NotFound("Epic not found")
+        return epic
+
+    # simple path (faster, no relations)
+    return await _get_or_404(session, Epic, epic_id)
 
 async def list_epics(session: AsyncSession, project_id: int) -> List[Epic]:
     q = select(Epic).where(Epic.project_id == project_id)
@@ -308,7 +437,6 @@ async def create_task(
         await _get_or_404(session, Task, parent_id)
     if reporter_id is not None:
         await _get_or_404(session, User, reporter_id)
-    due_date_obj = datetime.fromtimestamp(due_date, tz=timezone.utc)
     task = Task(
         project_id=project_id,
         title=title,
@@ -320,7 +448,7 @@ async def create_task(
         priority=priority,
         estimate=estimate,
         remaining=remaining,
-        due_date=due_date_obj,
+        due_date=due_date,
         reporter_id=reporter_id,
         order_index=order_index,
     )

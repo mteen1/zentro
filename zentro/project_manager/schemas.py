@@ -78,7 +78,6 @@ class TaskCreate(BaseModel):
     estimate: Optional[float] = None
     remaining: Optional[float] = None
     due_date: Optional[date] = None
-    reporter_id: Optional[int] = None
     order_index: Optional[int] = 0
 
 
