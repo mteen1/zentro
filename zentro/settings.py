@@ -81,7 +81,11 @@ class Settings(BaseSettings):
 
     gemini_api_key: Optional[str] = None
 
-    secret_key: str = "Hi"
+    secret_key: str = "foo"
+    access_token_expire_minutes: int = 1
+    refresh_token_expire_days: int = 14
+    hash_algorithm: str = "sha256"
+
 
     @property
     def db_url(self) -> URL:

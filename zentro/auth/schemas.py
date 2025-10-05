@@ -8,7 +8,6 @@ from pydantic import BaseModel, EmailStr
 
 class UserBase(BaseModel):
     email: EmailStr
-    username: Optional[str] = None
     full_name: Optional[str] = None
     active: Optional[bool] = True
 

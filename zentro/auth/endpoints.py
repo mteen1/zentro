@@ -49,7 +49,7 @@ async def login_for_access_token(
     session: AsyncSession = Depends(get_db_session),
 ):
     """
-    Standard OAuth2 password flow. Takes username (which is email) and password.
+    Standard OAuth2 password flow. Takes email (which is email) and password.
     """
     user = await services.authenticate_user(
         session, email=form_data.username, password=form_data.password
@@ -135,7 +135,6 @@ async def register_user(
         session,
         email=str(payload.email),
         password=payload.password,
-        username=payload.username,
         full_name=payload.full_name,
         active=payload.active,
     )

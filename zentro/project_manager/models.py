@@ -51,8 +51,6 @@ class User(Base):
                                                        nullable=False)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
-    username: Mapped[Optional[str]] = mapped_column(String(80), unique=True,
-                                                    nullable=True)
     full_name: Mapped[Optional[str]] = mapped_column(String(200))
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 

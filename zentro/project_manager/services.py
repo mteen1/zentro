@@ -208,7 +208,6 @@ async def create_user(
     user = User(
         email=email,
         password_hash=hashed_password,
-        username=username,
         full_name=full_name,
         active=active,
         refresh_token_param=random.randint(1, 1_000_000_000) # Initialize rtp

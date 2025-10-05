@@ -53,7 +53,7 @@ class TaskFollowUpAgent(BaseAgent):
         user_name = (
             assignee.full_name.split()[0]
             if (assignee.full_name and assignee.full_name.strip())
-            else assignee.username
+            else assignee.email
         )
         reason = TaskFollowUpAgent._format_reason(task)
 
