@@ -1539,6 +1539,18 @@ files = [
 ]
 
 [[package]]
+name = "justfile"
+version = "0.0.1a0"
+description = "Just Read, Just Write, Just Right"
+optional = false
+python-versions = "*"
+groups = ["dev"]
+files = [
+    {file = "justfile-0.0.1a0-py2.py3-none-any.whl", hash = "sha256:75ba63146bf24029696e31ee04d58dbbacf5443b27e895c69973e9bfd1f17a92"},
+    {file = "justfile-0.0.1a0.tar.gz", hash = "sha256:0f12000a1da84585402daff428fb842854d81574b923cb130af875f46ce43b4a"},
+]
+
+[[package]]
 name = "langchain"
 version = "0.3.27"
 description = "Building applications with LLMs through composability"
@@ -4697,4 +4709,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">3.9.1,<4"
-content-hash = "22c7fd03aeb1d5c6dce31a3c03cb430b816dbcf2efbddcf666ac40441159db90"
+content-hash = "9e2ab57c22dfe9f5f09cea980c4d40399fdd0b6ac31fe16f5883503848189cb4"
