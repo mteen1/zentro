@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     """
 
     host: str = "127.0.0.1"
+    origins: List[str] = ["http://127.0.0.1:3000", "http://localhost:3000"]
     port: int = 8000
     # quantity of workers for uvicorn
     workers_count: int = 1
