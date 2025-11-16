@@ -24,7 +24,7 @@ from zentro.project_manager.permissions import (
     verify_project_access,
     verify_task_access,
 )
-from zentro.auth.dependencies import get_current_user
+from zentro.auth.dependencies import get_current_user_db
 from zentro.utils import Conflict, NotFound, ServiceError, F
 
 
@@ -49,18 +49,19 @@ def translate_service_errors(fn: F) -> F:
 
 router = APIRouter()
 
+
 # -----------------------
 # Project endpoints
 # -----------------------
 @router.post(
-    "/projects",
+    "",
     response_model=ProjectOut,
     status_code=status.HTTP_201_CREATED,
 )
 @translate_service_errors
 async def create_project(
     payload: ProjectCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Create a new project. Creator automatically becomes PROJECT_ADMIN."""
@@ -73,11 +74,11 @@ async def create_project(
     )
 
 
-@router.get("/projects/{project_id}", response_model=ProjectOut)
+@router.get("/{project_id}", response_model=ProjectOut)
 @translate_service_errors
 async def get_project(
     project_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Get project details. Requires project access (any role)."""
@@ -85,12 +86,12 @@ async def get_project(
     return await services.get_project(session, project_id, load_children=False)
 
 
-@router.get("/projects", response_model=List[ProjectOut])
+@router.get("", response_model=List[ProjectOut])
 @translate_service_errors
 async def list_projects(
     limit: int = 50,
     offset: int = 0,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """List all projects the user has access to."""
@@ -103,7 +104,7 @@ async def list_projects(
 
 
 @router.post(
-    "/projects/{project_id}/users/{user_id}",
+    "/{project_id}/users/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 @translate_service_errors
@@ -111,7 +112,7 @@ async def add_user_to_project(
     project_id: int,
     user_id: int,
     role: ProjectRole = ProjectRole.DEVELOPER,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """
@@ -123,14 +124,14 @@ async def add_user_to_project(
 
 
 @router.delete(
-    "/projects/{project_id}/users/{user_id}",
+    "/{project_id}/users/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 @translate_service_errors
 async def remove_user_from_project(
     project_id: int,
     user_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """
@@ -142,7 +143,7 @@ async def remove_user_from_project(
 
 
 @router.patch(
-    "/projects/{project_id}/users/{user_id}/role",
+    "/{project_id}/users/{user_id}/role",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 @translate_service_errors
@@ -150,7 +151,7 @@ async def update_user_project_role(
     project_id: int,
     user_id: int,
     new_role: ProjectRole,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """
@@ -168,7 +169,7 @@ async def update_user_project_role(
 @translate_service_errors
 async def create_epic(
     payload: EpicCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Create epic. Requires PROJECT_MANAGER or higher role."""
@@ -184,11 +185,11 @@ async def create_epic(
     )
 
 
-@router.get("/projects/{project_id}/epics", response_model=List[EpicOut])
+@router.get("/{project_id}/epics", response_model=List[EpicOut])
 @translate_service_errors
 async def list_epics(
     project_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """List project epics. Requires project access."""
@@ -200,7 +201,7 @@ async def list_epics(
 @translate_service_errors
 async def delete_epic(
     epic_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Delete epic. Requires PROJECT_MANAGER or higher role."""
@@ -217,7 +218,7 @@ async def delete_epic(
 @translate_service_errors
 async def create_sprint(
     payload: SprintCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Create sprint. Requires PROJECT_MANAGER or higher role."""
@@ -233,11 +234,11 @@ async def create_sprint(
     )
 
 
-@router.get("/projects/{project_id}/sprints", response_model=List[SprintOut])
+@router.get("/{project_id}/sprints", response_model=List[SprintOut])
 @translate_service_errors
 async def list_sprints(
     project_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """List project sprints. Requires project access."""
@@ -246,14 +247,14 @@ async def list_sprints(
 
 
 @router.post(
-    "/projects/{project_id}/sprints/{sprint_id}/activate",
+    "/{project_id}/sprints/{sprint_id}/activate",
     response_model=SprintOut,
 )
 @translate_service_errors
 async def activate_sprint(
     project_id: int,
     sprint_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Activate sprint. Requires PROJECT_MANAGER or higher role."""
@@ -268,7 +269,7 @@ async def activate_sprint(
 @translate_service_errors
 async def create_task(
     payload: TaskCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Create task. Requires REPORTER or higher role."""
@@ -295,7 +296,7 @@ async def create_task(
 @translate_service_errors
 async def get_task(
     task_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Get task details. Requires project access."""
@@ -303,7 +304,7 @@ async def get_task(
     return await services.get_task(session, task_id, load_relations=False)
 
 
-@router.get("/projects/{project_id}/tasks", response_model=List[TaskOut])
+@router.get("/{project_id}/tasks", response_model=List[TaskOut])
 @translate_service_errors
 async def list_tasks(
     project_id: int,
@@ -311,7 +312,7 @@ async def list_tasks(
     priority: Optional[Priority] = None,
     limit: int = 100,
     offset: int = 0,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """List project tasks. Requires project access."""
@@ -331,7 +332,7 @@ async def list_tasks(
 async def patch_task(
     task_id: int,
     payload: TaskCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Update task. Requires DEVELOPER or higher role."""
@@ -344,7 +345,7 @@ async def patch_task(
 @translate_service_errors
 async def delete_task(
     task_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Delete task. Requires PROJECT_MANAGER or higher role."""
@@ -360,7 +361,7 @@ async def delete_task(
 async def assign_task(
     task_id: int,
     user_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Assign task to user. Requires DEVELOPER or higher role."""
@@ -376,7 +377,7 @@ async def assign_task(
 async def unassign_task(
     task_id: int,
     user_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Unassign task from user. Requires DEVELOPER or higher role."""
@@ -387,11 +388,11 @@ async def unassign_task(
 # -----------------------
 # Reporting / search endpoints
 # -----------------------
-@router.get("/projects/{project_id}/task-counts")
+@router.get("/{project_id}/task-counts")
 @translate_service_errors
 async def count_tasks_by_status(
     project_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Get task counts by status. Requires project access."""
@@ -400,13 +401,13 @@ async def count_tasks_by_status(
     return {str(k): v for k, v in data}
 
 
-@router.get("/projects/{project_id}/tasks/search", response_model=List[TaskOut])
+@router.get("/{project_id}/tasks/search", response_model=List[TaskOut])
 @translate_service_errors
 async def search_tasks(
     project_id: int,
     q: str,
     limit: int = 50,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Search tasks in project. Requires project access."""
@@ -418,7 +419,7 @@ async def search_tasks(
 @translate_service_errors
 async def suggest_priority(
     task_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Suggest priority for task. Requires project access."""

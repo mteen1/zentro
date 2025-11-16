@@ -2,24 +2,38 @@ from __future__ import annotations
 
 from functools import wraps
 from typing import List, Optional, cast, Any
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from zentro.auth.dependencies import get_current_user, get_current_user_db
+from zentro.auth.schemas import UserOut
 from zentro.db.dependencies import get_db_session
 from zentro.intelligence_manager import services
-from zentro.intelligence_manager.models import FollowUpStatus
+from zentro.intelligence_manager.models import (
+    Chat,
+    ChatMessage,
+    MessageRole,
+)
 from zentro.intelligence_manager.schemas import (
     BulkFollowUpCreate,
     BulkStatusUpdate,
+    ChatMessageOut,
     FollowUpStatsOut,
     TaskFollowUpCreate,
     TaskFollowUpOut,
     TaskFollowUpUpdate,
 )
 
+from zentro.project_manager.models import User
 from zentro.utils import Conflict, NotFound, ServiceError, F
 from fastapi import HTTPException, status
+from pydantic import BaseModel
+
+# project-agent runner
+from zentro.intelligence_manager.project_agent.agent import get_chat_history, run_agent
 
 def translate_service_errors(fn: F) -> F:
     """
@@ -43,279 +57,151 @@ def translate_service_errors(fn: F) -> F:
 
 router = APIRouter()
 
-# -----------------------
-# Task Follow-up endpoints
-# -----------------------
-@router.post(
-    "/task-follow-ups",
-    response_model=TaskFollowUpOut,
-    status_code=status.HTTP_201_CREATED,
-)
+
+class AgentPromptIn(BaseModel):
+    prompt: str
+    thread_id: Optional[str] = None
+
+
+import uuid
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+@router.post("/run")
 @translate_service_errors
-async def create_task_follow_up(
-    payload: TaskFollowUpCreate,
+async def run_project_agent(
+    payload: AgentPromptIn,
+    # Use the new dependency to get the full User object with an 'id'
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
-    return await services.create_task_follow_up(
-        session,
-        task_id=payload.task_id,
-        recipient_id=payload.recipient_id,
-        generated_message=payload.generated_message,
-        reason=payload.reason,
-        status=payload.status,
+    """
+    Run the project agent. Continues an existing chat if a thread_id is provided,
+    otherwise creates a new chat for the authenticated user.
+    """
+    thread_id_to_use = payload.thread_id
+    chat_obj = None
+
+    # If no thread_id, create a new chat for the user
+    if not thread_id_to_use:
+        # Generate a unique thread_id for this chat
+        new_thread_id = f"{current_user.id}:{uuid.uuid4().hex}"
+
+        # Create a new chat record in the database
+        chat_obj = Chat(
+            user_id=current_user.id,  # This now works!
+            thread_id=new_thread_id,
+            title=(
+                payload.prompt[:50] + "..."
+                if len(payload.prompt) > 50
+                else payload.prompt
+            ),
+        )
+        session.add(chat_obj)
+        await session.commit()
+        await session.refresh(chat_obj)
+
+        thread_id_to_use = new_thread_id
+    else:
+        # If a thread_id is provided, verify it belongs to the current user
+        stmt = select(Chat).where(
+            Chat.thread_id == thread_id_to_use,
+            Chat.user_id == current_user.id,  # This now works!
+        )
+        result = await session.execute(stmt)
+        chat_obj = result.scalar_one_or_none()
+
+        if not chat_obj:
+            raise HTTPException(
+                status_code=404,
+                detail="Chat not found or you do not have permission to access it.",
+            )
+
+    # Run the agent with the determined thread_id
+    agent_result = await run_agent(payload.prompt, thread_id=thread_id_to_use)
+
+    # Save user message
+    user_message = ChatMessage(
+        chat_id=chat_obj.id,
+        role=MessageRole.USER,
+        content=payload.prompt,
     )
+    session.add(user_message)
 
-
-@router.get("/task-follow-ups/{follow_up_id}", response_model=TaskFollowUpOut)
-@translate_service_errors
-async def get_task_follow_up(
-    follow_up_id: int,
-    session: AsyncSession = Depends(get_db_session),
-):
-    return await services.get_task_follow_up(session, follow_up_id, load_relations=True)
-
-
-@router.get("/task-follow-ups", response_model=List[TaskFollowUpOut])
-@translate_service_errors
-async def list_task_follow_ups(
-    task_id: Optional[int] = None,
-    recipient_id: Optional[int] = None,
-    status: Optional[FollowUpStatus] = None,
-    limit: int = 100,
-    offset: int = 0,
-    session: AsyncSession = Depends(get_db_session),
-):
-    return await services.list_task_follow_ups(
-        session,
-        task_id=task_id,
-        recipient_id=recipient_id,
-        status=status,
-        limit=limit,
-        offset=offset,
-        load_relations=True,
+    # Save assistant response
+    assistant_message = ChatMessage(
+        chat_id=chat_obj.id,
+        role=MessageRole.ASSISTANT,
+        content=agent_result["message"],
     )
+    session.add(assistant_message)
+
+    await session.commit()
+
+    # Return only what the frontend needs
+    return {
+        "message": agent_result["message"],
+        "thread_id": thread_id_to_use,
+    }
 
 
-@router.patch("/task-follow-ups/{follow_up_id}", response_model=TaskFollowUpOut)
+@router.get("/chats", response_model=List[dict])
 @translate_service_errors
-async def update_task_follow_up(
-    follow_up_id: int,
-    payload: TaskFollowUpUpdate,
+async def get_user_chats(
+    # Use the new dependency here as well
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
-    data = payload.model_dump(exclude_unset=True)
-    return await services.update_task_follow_up(session, follow_up_id, **data)
+    """Get a list of all chats for the currently authenticated user."""
+
+    stmt = select(Chat).where(Chat.user_id == current_user.id).order_by(Chat.id.desc())
+    result = await session.execute(stmt)
+    chats = result.scalars().all()
+
+    # Format the response for the client
+    return [
+        {
+            "id": chat.id,
+            "thread_id": chat.thread_id,
+            "title": chat.title,
+        }
+        for chat in chats
+    ]
 
 
-@router.delete(
-    "/task-follow-ups/{follow_up_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
+@router.get("/chats/{thread_id}/history", response_model=List[ChatMessageOut])
 @translate_service_errors
-async def delete_task_follow_up(
-    follow_up_id: int,
+async def get_chat_history_endpoint(
+    thread_id: str,
+    current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
-    await services.delete_task_follow_up(session, follow_up_id)
-
-
-# -----------------------
-# Status Management endpoints
-# -----------------------
-@router.post(
-    "/task-follow-ups/{follow_up_id}/mark-sent",
-    response_model=TaskFollowUpOut,
-)
-@translate_service_errors
-async def mark_follow_up_as_sent(
-    follow_up_id: int,
-    session: AsyncSession = Depends(get_db_session),
-):
-    return await services.mark_follow_up_as_sent(session, follow_up_id)
-
-
-@router.post(
-    "/task-follow-ups/{follow_up_id}/mark-acknowledged",
-    response_model=TaskFollowUpOut,
-)
-@translate_service_errors
-async def mark_follow_up_as_acknowledged(
-    follow_up_id: int,
-    session: AsyncSession = Depends(get_db_session),
-):
-    return await services.mark_follow_up_as_acknowledged(session, follow_up_id)
-
-
-@router.post("/task-follow-ups/bulk-status-update")
-@translate_service_errors
-async def bulk_update_follow_up_status(
-    payload: BulkStatusUpdate,
-    session: AsyncSession = Depends(get_db_session),
-):
-    updated_count = await services.bulk_update_follow_up_status(
-        session,
-        payload.follow_up_ids,
-        payload.status,
+    """Get the chat history for a specific thread_id from ChatMessage model."""
+    # Verify the chat belongs to the current user
+    stmt = select(Chat).where(
+        Chat.thread_id == thread_id,
+        Chat.user_id == current_user.id,
     )
-    return {"updated_count": updated_count}
+    result = await session.execute(stmt)
+    chat = result.scalar_one_or_none()
 
+    if not chat:
+        raise HTTPException(
+            status_code=404,
+            detail="Chat not found or you do not have permission to access it.",
+        )
 
-# -----------------------
-# Query Helper endpoints
-# -----------------------
-@router.get("/task-follow-ups/pending", response_model=List[TaskFollowUpOut])
-@translate_service_errors
-async def get_pending_follow_ups(
-    recipient_id: Optional[int] = None,
-    limit: int = 100,
-    session: AsyncSession = Depends(get_db_session),
-):
-    return await services.get_pending_follow_ups(
-        session,
-        recipient_id=recipient_id,
-        limit=limit,
+    # Get all messages for this chat, ordered by creation time
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.chat_id == chat.id)
+        .order_by(ChatMessage.created_at)
     )
+    result = await session.execute(stmt)
+    messages = result.scalars().all()
 
-
-@router.get("/tasks/{task_id}/follow-ups", response_model=List[TaskFollowUpOut])
-@translate_service_errors
-async def get_follow_ups_for_task(
-    task_id: int,
-    status: Optional[FollowUpStatus] = None,
-    limit: int = 50,
-    session: AsyncSession = Depends(get_db_session),
-):
-    return await services.get_follow_ups_for_task(
-        session,
-        task_id,
-        status=status,
-        limit=limit,
-    )
-
-
-@router.get("/users/{recipient_id}/follow-ups", response_model=List[TaskFollowUpOut])
-@translate_service_errors
-async def get_follow_ups_for_recipient(
-    recipient_id: int,
-    status: Optional[FollowUpStatus] = None,
-    limit: int = 100,
-    session: AsyncSession = Depends(get_db_session),
-):
-    return await services.get_follow_ups_for_recipient(
-        session,
-        recipient_id,
-        status=status,
-        limit=limit,
-    )
-
-
-# -----------------------
-# Analytics / Reporting endpoints
-# -----------------------
-@router.get("/follow-ups/stats")
-@translate_service_errors
-async def get_follow_up_stats(
-    recipient_id: Optional[int] = None,
-    session: AsyncSession = Depends(get_db_session),
-):
-    stats = await services.get_follow_up_stats(session, recipient_id=recipient_id)
-    return FollowUpStatsOut(**stats)
-
-
-@router.get("/follow-ups/counts-by-status")
-@translate_service_errors
-async def count_follow_ups_by_status(
-    recipient_id: Optional[int] = None,
-    task_id: Optional[int] = None,
-    session: AsyncSession = Depends(get_db_session),
-):
-    data = await services.count_follow_ups_by_status(
-        session,
-        recipient_id=recipient_id,
-        task_id=task_id,
-    )
-    # return as dict for convenience
-    return {str(status): count for status, count in data}
-
-
-@router.get("/users/{recipient_id}/follow-ups/stats", response_model=FollowUpStatsOut)
-@translate_service_errors
-async def get_recipient_follow_up_stats(
-    recipient_id: int,
-    session: AsyncSession = Depends(get_db_session),
-):
-    stats = await services.get_follow_up_stats(session, recipient_id=recipient_id)
-    return FollowUpStatsOut(**stats)
-
-
-# -----------------------
-# Batch Operations endpoints
-# -----------------------
-@router.post(
-    "/task-follow-ups/bulk-create",
-    response_model=List[TaskFollowUpOut],
-    status_code=status.HTTP_201_CREATED,
-)
-@translate_service_errors
-async def create_bulk_follow_ups(
-    payload: BulkFollowUpCreate,
-    session: AsyncSession = Depends(get_db_session),
-):
-    follow_ups_data = [item.model_dump() for item in payload.follow_ups]
-    return await services.create_bulk_follow_ups(session, follow_ups_data)
-
-
-@router.delete("/task-follow-ups/cleanup")
-@translate_service_errors
-async def cleanup_old_acknowledged_follow_ups(
-    days_old: int = 30,
-    session: AsyncSession = Depends(get_db_session),
-):
-    deleted_count = await services.cleanup_old_acknowledged_follow_ups(
-        session,
-        days_old=days_old,
-    )
-    return {"deleted_count": deleted_count}
-
-
-# -----------------------
-# AI Integration endpoints
-# -----------------------
-@router.post(
-    "/tasks/{task_id}/generate-follow-up/{recipient_id}",
-    response_model=TaskFollowUpOut,
-    status_code=status.HTTP_201_CREATED,
-)
-@translate_service_errors
-async def generate_follow_up_for_overdue_task(
-    task_id: int,
-    recipient_id: int,
-    session: AsyncSession = Depends(get_db_session),
-):
-    """Generate an AI follow-up for an overdue task."""
-    return await services.generate_follow_up_for_overdue_task(
-        session,
-        task_id,
-        recipient_id,
-    )
-
-
-# -----------------------
-# Search endpoints
-# -----------------------
-@router.get("/task-follow-ups/search", response_model=List[TaskFollowUpOut])
-@translate_service_errors
-async def search_follow_ups(
-    q: str,
-    recipient_id: Optional[int] = None,
-    status: Optional[FollowUpStatus] = None,
-    limit: int = 50,
-    session: AsyncSession = Depends(get_db_session),
-):
-    return await services.search_follow_ups(
-        session,
-        search_term=q,
-        recipient_id=recipient_id,
-        status=status,
-        limit=limit,
-    )
+    return messages

@@ -7,7 +7,6 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from zentro.intelligence_manager.agents.followup_agent import TaskFollowUpAgent
 from zentro.intelligence_manager.models import FollowUpStatus, TaskFollowUp
 from zentro.project_manager.models import Task, User
 from zentro.utils import NotFound, _get_or_404
@@ -308,11 +307,27 @@ async def generate_follow_up_for_overdue_task(
     Service wrapper: load task & user, delegate generation + persistence to the agent.
     The caller controls transaction/commit.
     """
+    # The follow-up agent implementation was removed. Fall back to a simple
+    # auto-generated reminder message and persist it so callers still get a
+    # TaskFollowUp object.
     task: Task = await _get_or_404(session, Task, task_id)
     recipient: User = await _get_or_404(session, User, recipient_id)
 
-    agent = TaskFollowUpAgent()
-    follow_up = await agent.generate_and_persist(task, recipient, session)
+    generated_message = (
+        f"Reminder: the task '{task.title}' (ID: {task.id}) is overdue. "
+        "Please update the task or contact the assignee."
+    )
+
+    follow_up = TaskFollowUp(
+        task_id=task.id,
+        recipient_id=recipient.id,
+        generated_message=generated_message,
+        reason="auto-generated",
+        status=FollowUpStatus.PENDING,
+    )
+    session.add(follow_up)
+    await session.flush()
+    await session.refresh(follow_up)
     return follow_up
 
 
