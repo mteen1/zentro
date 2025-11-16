@@ -12,7 +12,6 @@ class ProjectCreate(BaseModel):
     name: str = Field(..., max_length=200)
     key: Optional[str] = Field(None, max_length=20)
     description: Optional[str] = None
-    creator_id: Optional[int] = None
 
 
 class ProjectOut(BaseModel):

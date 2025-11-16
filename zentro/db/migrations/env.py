@@ -31,6 +31,18 @@ target_metadata = meta
 # ... etc.
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    """
+    Exclude checkpointer tables from autogenerate.
+
+    These tables are managed by LangGraph's AsyncPostgresSaver,
+    not by SQLAlchemy models, so we should ignore them in migrations.
+    """
+    if type_ == "table" and name.startswith("checkpoint"):
+        return False
+    return True
+
+
 async def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -48,6 +60,7 @@ async def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -60,7 +73,11 @@ def do_run_migrations(connection: Connection) -> None:
 
     :param connection: connection to the database.
     """
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+    )
 
     with context.begin_transaction():
         context.run_migrations()

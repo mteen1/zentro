@@ -1,10 +1,11 @@
-FROM python:3.11.4-slim-bullseye AS prod
+FROM python:3.13.6-slim-bullseye AS prod
 RUN apt-get update && apt-get install -y \
   gcc \
+  libpq-dev \ 
   && rm -rf /var/lib/apt/lists/*
 
 
-RUN pip install poetry==1.8.2
+RUN pip install poetry==2.2.1
 
 # Configuring poetry
 RUN poetry config virtualenvs.create false
@@ -15,10 +16,11 @@ COPY pyproject.toml poetry.lock /app/src/
 WORKDIR /app/src
 
 # Installing requirements
-RUN --mount=type=cache,target=/tmp/poetry_cache poetry install --only main
+RUN --mount=type=cache,target=/tmp/poetry_cache poetry install --only main --no-root
 # Removing gcc
 RUN apt-get purge -y \
   gcc \
+  libpq-dev \
   && rm -rf /var/lib/apt/lists/*
 
 # Copying actuall application

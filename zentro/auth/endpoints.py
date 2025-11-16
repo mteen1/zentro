@@ -65,9 +65,9 @@ async def login_for_access_token(
     await services.update_user(session, user.id, last_login=datetime.datetime.now(tz=datetime.UTC))
 
     # Create tokens
-    access_token = security.create_access_token(data={"sub": user.email})
+    access_token = security.create_access_token(data={"sub": str(user.id)})
     refresh_token = security.create_refresh_token(
-        data={"sub": user.email, "rtp": user.refresh_token_param}
+        data={"sub": str(user.id), "rtp": user.refresh_token_param}
     )
 
     return {
@@ -93,23 +93,23 @@ async def refresh_access_token(
         payload = jwt.decode(
             refresh_token, security.SECRET_KEY, algorithms=[security.ALGORITHM]
         )
-        email: str = payload.get("sub")
-        rtp: int = payload.get("rtp")
-        if email is None or rtp is None:
+        user_id: int = payload["sub"]
+        rtp: int = payload["rtp"]
+        if user_id is None or rtp is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
 
-    user = await services.get_user_by_email(session, email=email)
+    user = await services.get_user(session, user_id=user_id)
     if not user or user.refresh_token_param != rtp:
         # The refresh token parameter has changed, meaning the token is invalidated
         raise credentials_exception
 
     # Create new tokens
-    new_access_token = security.create_access_token(data={"sub": user.email})
+    new_access_token = security.create_access_token(data={"sub": user.id})
     # Optionally, you can also issue a new refresh token
     new_refresh_token = security.create_refresh_token(
-        data={"sub": user.email, "rtp": user.refresh_token_param}
+        data={"sub": user.id, "rtp": user.refresh_token_param}
     )
 
     return {
@@ -158,7 +158,6 @@ async def get_user(
     # current_user: UserOut = Depends(get_current_user),
 ):
     return await services.get_user(session, user_id)
-
 
 
 @router.patch("/users/{user_id}", response_model=UserOut)

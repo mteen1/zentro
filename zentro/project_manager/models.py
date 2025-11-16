@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, Relationship, mapped_column, relationship
 from zentro.db.base import Base
 from zentro.project_manager.enums import Priority, TaskStatus, UserRole, ProjectRole
 
+
 project_users = Table(
     "project_users",
     Base.metadata,
@@ -69,6 +70,10 @@ class User(Base):
         "Task",
         secondary=task_assignees,
         back_populates="assignees",
+    )
+
+    chats: Mapped[List["Chat"]] = relationship(  # type: ignore
+        "Chat", back_populates="user", cascade="all, delete-orphan"
     )
 
 

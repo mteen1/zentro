@@ -109,7 +109,7 @@ async def update_user_global_role(
 
 async def list_projects(
     session: AsyncSession,
-    user_id: int = None,
+    user_id: int | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[Project]:
@@ -145,9 +145,9 @@ async def list_projects(
 async def create_project(
     session: AsyncSession,
     name: str,
-    key: str = None,
-    description: str = None,
-    creator_id: int = None,
+    key: str | None = None,
+    description: str | None = None,
+    creator_id: int | None = None,
 ) -> Project:
     """
     Create a project. If creator_id is provided, automatically add them
@@ -284,7 +284,6 @@ async def get_project(
             raise NotFound("Project not found")
         return project
     return await _get_or_404(session, Project, project_id)
-
 
 
 # ---- Epics ----

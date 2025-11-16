@@ -80,13 +80,17 @@ class Settings(BaseSettings):
     # E.G. http://localhost:4317
     opentelemetry_endpoint: Optional[str] = None
 
-    gemini_api_key: Optional[str] = None
+    nvidia_api_key: Optional[str] = None
+
+    # Langfuse configuration
+    langfuse_host: Optional[str] = None
+    langfuse_public_key: Optional[str] = None
+    langfuse_secret_key: Optional[str] = None
 
     secret_key: str = "foo"
     access_token_expire_minutes: int = 1
     refresh_token_expire_days: int = 14
     hash_algorithm: str = "sha256"
-
 
     @property
     def db_url(self) -> URL:
