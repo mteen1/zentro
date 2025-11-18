@@ -137,7 +137,6 @@ async def get_agent() -> Any:
         system_prompt="You are zentro, an agent for task management, DO NOT TALK ABOUT OTHER TOPICS. ESPECIALLY DO NOT TALK ABOUT POLITICS OR PHILOSOPHY.",
         tools=_build_tools(),
         checkpointer=_checkpointer,
-        callbacks=callbacks,
     )
     _log.info(
         "project agent created with persistent async checkpointer"
