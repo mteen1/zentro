@@ -10,12 +10,10 @@ from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langfuse.langchain import CallbackHandler
-from opentelemetry import trace
-from opentelemetry.trace import Status, StatusCode
+
 
 # tools
 from zentro.intelligence_manager.project_agent.tools import (
-    project_create,
     project_get,
     project_list,
     task_create,
@@ -23,6 +21,15 @@ from zentro.intelligence_manager.project_agent.tools import (
     task_update,
     task_delete,
     task_assign,
+    task_unassign,
+    task_list_my,
+    task_search,
+    epic_list,
+    epic_get,
+    sprint_list,
+    sprint_get_active,
+    project_members_list,
+    task_stats_by_status,
 )
 
 _log = logging.getLogger(__name__)
@@ -36,14 +43,26 @@ _langfuse_handler: Optional[CallbackHandler] = None
 
 def _build_tools() -> list:
     return [
-        project_create,
+        # Project tools
         project_get,
         project_list,
+        project_members_list,
+        # Task tools
         task_create,
         task_get,
         task_update,
         task_delete,
         task_assign,
+        task_unassign,
+        task_list_my,
+        task_search,
+        task_stats_by_status,
+        # Epic tools
+        epic_list,
+        epic_get,
+        # Sprint tools
+        sprint_list,
+        sprint_get_active,
     ]
 
 
@@ -75,7 +94,10 @@ async def _keep_checkpointer_alive() -> AsyncPostgresSaver:
 
 
 def _get_langfuse_handler() -> Optional[CallbackHandler]:
-    """Get or create Langfuse callback handler."""
+    """Get or create Langfuse callback handler.
+    
+    Note: Langfuse client must be initialized in lifespan before this is called.
+    """
     global _langfuse_handler
 
     if _langfuse_handler is not None:
@@ -93,11 +115,8 @@ def _get_langfuse_handler() -> Optional[CallbackHandler]:
         return None
 
     try:
-        _langfuse_handler = CallbackHandler(
-            public_key=settings.langfuse_public_key,
-            secret_key=settings.langfuse_secret_key,
-            host=settings.langfuse_host,
-        )
+        # The CallbackHandler will use the globally initialized Langfuse client
+        _langfuse_handler = CallbackHandler()
         _log.info("Langfuse callback handler created")
         return _langfuse_handler
     except Exception as e:
@@ -134,7 +153,10 @@ async def get_agent() -> Any:
 
     _agent = create_agent(
         model=model,
-        system_prompt="You are zentro, an agent for task management, DO NOT TALK ABOUT OTHER TOPICS. ESPECIALLY DO NOT TALK ABOUT POLITICS OR PHILOSOPHY.",
+        system_prompt=(
+            "You are zentro, an agent for task management. DO NOT TALK ABOUT OTHER TOPICS. "
+            "ESPECIALLY DO NOT TALK ABOUT POLITICS OR PHILOSOPHY."
+        ),
         tools=_build_tools(),
         checkpointer=_checkpointer,
     )
@@ -149,8 +171,6 @@ async def get_agent() -> Any:
 async def run_agent(prompt: str, thread_id: Optional[str] = None, **kwargs) -> dict:
     from zentro.intelligence_manager.utils import set_current_user_id
 
-    tracer = trace.get_tracer(__name__)
-
     # Extract user_id from thread_id (format: "{user_id}:{uuid}")
     user_id = None
     if thread_id and ":" in thread_id:
@@ -162,106 +182,35 @@ async def run_agent(prompt: str, thread_id: Optional[str] = None, **kwargs) -> d
     # Set user_id in context for tools to access
     set_current_user_id(user_id)
 
-    with tracer.start_as_current_span("agent.run") as span:
-        agent = await get_agent()
+    agent = await get_agent()
 
-        payload = {"messages": [{"role": "user", "content": prompt}]}
-        config = {"configurable": {"thread_id": thread_id or "api"}}
+    payload = {"messages": [{"role": "user", "content": prompt}]}
+    config = {"configurable": {"thread_id": thread_id or "api"}}
 
-        # Add span attributes
-        span.set_attribute("agent.thread_id", thread_id or "api")
-        span.set_attribute("agent.prompt_length", len(prompt))
+    # Add Langfuse handler to callbacks if available
+    langfuse_handler = _get_langfuse_handler()
+    if langfuse_handler:
+        config["callbacks"] = [langfuse_handler]
+        
+        # Optional: Add user_id to Langfuse trace if available
         if user_id:
-            span.set_attribute("agent.user_id", user_id)
+             pass
 
-        try:
-            result = await agent.ainvoke(payload, config)
-        except Exception as e:
-            _log.exception("agent invocation failed")
-            span.record_exception(e)
-            span.set_status(Status(StatusCode.ERROR, "agent invocation failed"))
-            raise
+    try:
+        result = await agent.ainvoke(payload, config)
+    except Exception as e:
+        _log.exception("agent invocation failed")
+        raise
 
-        # Extract message
-        last_message = None
-        try:
-            last_message = dict(result["messages"][-1])["content"]
-        except Exception:
-            _log.exception("failed to extract message")
-            last_message = str(result)
+    # Extract message
+    last_message = None
+    try:
+        last_message = dict(result["messages"][-1])["content"]
+    except Exception:
+        _log.exception("failed to extract message")
+        last_message = str(result)
 
-        # Extract and record metrics from the result
-        try:
-            if "messages" in result and len(result["messages"]) > 0:
-                last_msg = result["messages"][-1]
-                if isinstance(last_msg, dict):
-                    # Extract token usage from response_metadata
-                    response_metadata = last_msg.get("response_metadata", {})
-                    token_usage = response_metadata.get("token_usage", {})
-
-                    if token_usage:
-                        span.set_attribute(
-                            "agent.tokens.prompt", token_usage.get("prompt_tokens", 0)
-                        )
-                        span.set_attribute(
-                            "agent.tokens.completion",
-                            token_usage.get("completion_tokens", 0),
-                        )
-                        span.set_attribute(
-                            "agent.tokens.total", token_usage.get("total_tokens", 0)
-                        )
-                        span.set_attribute(
-                            "agent.tokens.reasoning",
-                            token_usage.get("reasoning_tokens", 0),
-                        )
-
-                    # Extract model info
-                    model_name = response_metadata.get("model_name")
-                    if model_name:
-                        span.set_attribute("agent.model.name", model_name)
-
-                    model_provider = response_metadata.get("model_provider")
-                    if model_provider:
-                        span.set_attribute("agent.model.provider", model_provider)
-
-                    finish_reason = response_metadata.get("finish_reason")
-                    if finish_reason:
-                        span.set_attribute("agent.finish_reason", finish_reason)
-
-                    # Extract usage_metadata if available
-                    usage_metadata = last_msg.get("usage_metadata", {})
-                    if usage_metadata:
-                        span.set_attribute(
-                            "agent.usage.input_tokens",
-                            usage_metadata.get("input_tokens", 0),
-                        )
-                        span.set_attribute(
-                            "agent.usage.output_tokens",
-                            usage_metadata.get("output_tokens", 0),
-                        )
-                        span.set_attribute(
-                            "agent.usage.total_tokens",
-                            usage_metadata.get("total_tokens", 0),
-                        )
-
-                    # Check for tool calls
-                    tool_calls = last_msg.get("tool_calls", [])
-                    if tool_calls:
-                        span.set_attribute("agent.tool_calls.count", len(tool_calls))
-                        # Extract tool names - handle both dict and object formats
-                        tool_names = []
-                        for tc in tool_calls:
-                            if isinstance(tc, dict):
-                                tool_names.append(tc.get("name", "unknown"))
-                            elif hasattr(tc, "name"):
-                                tool_names.append(getattr(tc, "name", "unknown"))
-                        if tool_names:
-                            span.set_attribute("agent.tool_calls.names", tool_names)
-        except Exception:
-            _log.exception("failed to extract metrics from agent result")
-
-        span.set_status(Status(StatusCode.OK))
-        return {"message": last_message}
+    return {"message": last_message}
 
 
 async def get_chat_history(thread_id: str) -> list:

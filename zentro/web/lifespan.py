@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
+from langfuse import Langfuse
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -27,6 +28,8 @@ from zentro.services.rabbit.lifespan import init_rabbit, shutdown_rabbit
 from zentro.services.redis.lifespan import init_redis, shutdown_redis
 from zentro.settings import settings
 from zentro.tkq import broker
+
+logger = logging.getLogger(__name__)
 
 
 def _setup_db(app: FastAPI) -> None:  # pragma: no cover
@@ -124,6 +127,33 @@ def stop_opentelemetry(app: FastAPI) -> None:  # pragma: no cover
     AioPikaInstrumentor().uninstrument()
 
 
+def setup_langfuse() -> None:  # pragma: no cover
+    """
+    Initialize Langfuse client.
+
+    This must be called during application startup to ensure
+    the Langfuse client is properly configured before any LLM calls.
+    """
+    if (
+        not settings.langfuse_host
+        or not settings.langfuse_public_key
+        or not settings.langfuse_secret_key
+    ):
+        logger.info("Langfuse not configured, skipping initialization")
+        return
+
+    try:
+        # Initialize the global Langfuse client
+        Langfuse(
+            public_key=settings.langfuse_public_key,
+            secret_key=settings.langfuse_secret_key,
+            host=settings.langfuse_host,
+        )
+        logger.info("Langfuse client initialized successfully")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Langfuse client: {e}")
+
+
 def setup_prometheus(app: FastAPI) -> None:  # pragma: no cover
     """
     Enables prometheus integration.
@@ -154,6 +184,7 @@ async def lifespan_setup(
         await broker.startup()
     _setup_db(app)
     setup_opentelemetry(app)
+    setup_langfuse()
     init_redis(app)
     init_rabbit(app)
     setup_prometheus(app)

@@ -17,6 +17,7 @@ services:
     networks:
       - default
       - traefik-shared
+      - langfuse_langfuse
     depends_on:
       db:
         condition: service_healthy
@@ -108,3 +109,6 @@ networks:
   # Network for traefik.
   traefik-shared:
     name: traefik-shared
+  # Network for langfuse (external, created by langfuse docker-compose)
+  langfuse_langfuse:
+    external: true
