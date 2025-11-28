@@ -1,25 +1,20 @@
 services:
   api:
     environment:
-      # Adds opentelemetry endpoint.
       ZENTRO_OPENTELEMETRY_ENDPOINT: "http://otel-collector:4317"
 
 
-  # TODO: add and test elastic, and production logging
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.53.0
+    # Recommendation: Upgrade to a newer contrib version
+    image: otel/opentelemetry-collector-contrib:0.100.0 
     volumes:
-      # Adds config for opentelemetry.
       - ./deploy/otel-collector-config.yml:/config.yml
     command: --config config.yml
     ports:
-      # Collector's endpoint
-      - "4317:4317"
-
-  jaeger:
-    image: jaegertracing/all-in-one:1.35
-    hostname: jaeger
-    ports:
-      # Jaeger UI
-      - 16686:16686
-
+      - "4317:4317"   # gRPC receiver
+      - "4318:4318"   # HTTP receiver (optional but good to have)
+    environment:
+      # Define your Langfuse Host (e.g., https://cloud.langfuse.com or your self-hosted URL)
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
+      # You must generate a Basic Auth Header: "Basic base64(public_key:secret_key)"
+      - LANGFUSE_AUTH_HEADER=${LANGFUSE_AUTH_HEADER}

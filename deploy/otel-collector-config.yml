@@ -1,24 +1,27 @@
-# Receives all info with OpenTelemetry protocol.
 receivers:
   otlp:
     protocols:
       grpc:
+        endpoint: "0.0.0.0:4317"
       http:
+        endpoint: "0.0.0.0:4318"
 
-# Batch all spans.
 processors:
   batch:
 
 exporters:
-  # Exports spans to log.
   logging:
-    logLevel: info
+    loglevel: debug
 
-  # Exports spans to jaeger.
-  jaeger:
-    endpoint: "jaeger:14250"
-    tls:
-      insecure: true
+
+  # --- ADDED CONFIGURATION FOR LANGFUSE ---
+  otlphttp/langfuse:
+    # The collector automatically appends /v1/traces to this path
+    endpoint: "${LANGFUSE_HOST}/api/public/otel"
+    headers:
+      # Uses the environment variable defined in docker-compose
+      Authorization: "${LANGFUSE_AUTH_HEADER}"
+  # ----------------------------------------
 
 extensions:
   health_check:
@@ -30,4 +33,5 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [logging, jaeger]
+      # Add the new exporter here
+      exporters: [logging, otlphttp/langfuse]

@@ -28,6 +28,7 @@ from zentro.services.rabbit.lifespan import init_rabbit, shutdown_rabbit
 from zentro.services.redis.lifespan import init_redis, shutdown_redis
 from zentro.settings import settings
 from zentro.tkq import broker
+from zentro.intelligence_manager.prompts import initialize_prompts
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,7 @@ async def lifespan_setup(
     _setup_db(app)
     setup_opentelemetry(app)
     setup_langfuse()
+    initialize_prompts()
     init_redis(app)
     init_rabbit(app)
     setup_prometheus(app)

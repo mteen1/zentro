@@ -10,6 +10,7 @@ from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langfuse.langchain import CallbackHandler
+from zentro.intelligence_manager.prompts import PROJECT_AGENT_PROMPT
 
 
 # tools
@@ -153,10 +154,7 @@ async def get_agent() -> Any:
 
     _agent = create_agent(
         model=model,
-        system_prompt=(
-            "You are zentro, an agent for task management. DO NOT TALK ABOUT OTHER TOPICS. "
-            "ESPECIALLY DO NOT TALK ABOUT POLITICS OR PHILOSOPHY."
-        ),
+        system_prompt=PROJECT_AGENT_PROMPT,
         tools=_build_tools(),
         checkpointer=_checkpointer,
     )
