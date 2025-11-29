@@ -10,7 +10,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langfuse.langchain import CallbackHandler
 from loguru import logger
-from zentro.intelligence_manager.prompts import PROJECT_AGENT_PROMPT
+from zentro.intelligence_manager import prompts
 
 
 # tools
@@ -153,7 +153,7 @@ async def get_agent() -> Any:
 
     _agent = create_agent(
         model=model,
-        system_prompt=PROJECT_AGENT_PROMPT,
+        system_prompt=prompts.PROJECT_AGENT_PROMPT,
         tools=_build_tools(),
         checkpointer=_checkpointer,
     )
