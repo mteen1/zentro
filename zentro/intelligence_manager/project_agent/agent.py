@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any, Optional
 
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langfuse.langchain import CallbackHandler
+from loguru import logger
 from zentro.intelligence_manager.prompts import PROJECT_AGENT_PROMPT
 
 
@@ -33,7 +33,7 @@ from zentro.intelligence_manager.project_agent.tools import (
     task_stats_by_status,
 )
 
-_log = logging.getLogger(__name__)
+
 
 # Global singletons
 _agent: Optional[Any] = None
@@ -82,15 +82,14 @@ async def _keep_checkpointer_alive() -> AsyncPostgresSaver:
     # This `async with` will stay open until the task is cancelled
     async with AsyncPostgresSaver.from_conn_string(psycopg_url) as checkpointer:
         _checkpointer = checkpointer
-        await checkpointer.setup()  # Create tables
-        _log.info("AsyncPostgresSaver connected and tables ready")
+        logger.info("AsyncPostgresSaver connection ready")
 
         # Keep the context alive indefinitely
         try:
             while True:
                 await asyncio.sleep(3600)  # Sleep forever
         except asyncio.CancelledError:
-            _log.info("Shutting down AsyncPostgresSaver...")
+            logger.info("Shutting down AsyncPostgresSaver...")
             raise  # Let context exit
 
 
@@ -112,16 +111,16 @@ def _get_langfuse_handler() -> Optional[CallbackHandler]:
         or not settings.langfuse_public_key
         or not settings.langfuse_secret_key
     ):
-        _log.debug("Langfuse not configured, skipping callback handler")
+        logger.debug("Langfuse not configured, skipping callback handler")
         return None
 
     try:
         # The CallbackHandler will use the globally initialized Langfuse client
         _langfuse_handler = CallbackHandler()
-        _log.info("Langfuse callback handler created")
+        logger.info("Langfuse callback handler created")
         return _langfuse_handler
     except Exception as e:
-        _log.warning(f"Failed to create Langfuse handler: {e}")
+        logger.warning(f"Failed to create Langfuse handler: {e}")
         return None
 
 
@@ -158,7 +157,7 @@ async def get_agent() -> Any:
         tools=_build_tools(),
         checkpointer=_checkpointer,
     )
-    _log.info(
+    logger.info(
         "project agent created with persistent async checkpointer"
         + (" and Langfuse" if langfuse_handler else "")
     )
@@ -175,7 +174,7 @@ async def run_agent(prompt: str, thread_id: Optional[str] = None, **kwargs) -> d
         try:
             user_id = int(thread_id.split(":")[0])
         except (ValueError, IndexError):
-            _log.warning(f"Could not extract user_id from thread_id: {thread_id}")
+            logger.warning(f"Could not extract user_id from thread_id: {thread_id}")
 
     # Set user_id in context for tools to access
     set_current_user_id(user_id)
@@ -197,7 +196,7 @@ async def run_agent(prompt: str, thread_id: Optional[str] = None, **kwargs) -> d
     try:
         result = await agent.ainvoke(payload, config)
     except Exception as e:
-        _log.exception("agent invocation failed")
+        logger.exception("agent invocation failed")
         raise
 
     # Extract message
@@ -205,7 +204,7 @@ async def run_agent(prompt: str, thread_id: Optional[str] = None, **kwargs) -> d
     try:
         last_message = dict(result["messages"][-1])["content"]
     except Exception:
-        _log.exception("failed to extract message")
+        logger.exception("failed to extract message")
         last_message = str(result)
 
     return {"message": last_message}
@@ -228,8 +227,40 @@ async def get_chat_history(thread_id: str) -> list:
 
         return messages
     except Exception:
-        _log.exception("failed to get chat history")
+        logger.exception("failed to get chat history")
         return []
+
+
+async def stream_agent(prompt: str, thread_id: Optional[str] = None) -> Any:
+    """Stream the agent's response token by token."""
+    from zentro.intelligence_manager.utils import set_current_user_id
+
+    # Extract user_id from thread_id (format: "{user_id}:{uuid}")
+    user_id = None
+    if thread_id and ":" in thread_id:
+        try:
+            user_id = int(thread_id.split(":")[0])
+        except (ValueError, IndexError):
+            logger.warning(f"Could not extract user_id from thread_id: {thread_id}")
+
+    # Set user_id in context for tools to access
+    set_current_user_id(user_id)
+
+    agent = await get_agent()
+
+    payload = {"messages": [{"role": "user", "content": prompt}]}
+    config = {"configurable": {"thread_id": thread_id or "api"}}
+
+    # Add Langfuse handler to callbacks if available
+    langfuse_handler = _get_langfuse_handler()
+    if langfuse_handler:
+        config["callbacks"] = [langfuse_handler]
+
+    async for event in agent.astream_events(payload, config, version="v2"):
+        if event["event"] == "on_chat_model_stream":
+            chunk = event["data"]["chunk"]
+            if chunk.content:
+                yield chunk.content
 
 
 # Graceful shutdown
@@ -243,7 +274,7 @@ async def shutdown_agent():
             pass
         _checkpointer_context = None
         _checkpointer = None
-        _log.info("AsyncPostgresSaver shut down")
+        logger.info("AsyncPostgresSaver shut down")
 
 
-__all__ = ["get_agent", "run_agent", "shutdown_agent", "get_chat_history"]
+__all__ = ["get_agent", "run_agent", "stream_agent", "shutdown_agent", "get_chat_history"]

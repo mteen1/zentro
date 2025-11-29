@@ -29,6 +29,7 @@ from zentro.services.redis.lifespan import init_redis, shutdown_redis
 from zentro.settings import settings
 from zentro.tkq import broker
 from zentro.intelligence_manager.prompts import initialize_prompts
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +167,26 @@ def setup_prometheus(app: FastAPI) -> None:  # pragma: no cover
     ).expose(app, should_gzip=True, name="prometheus_metrics")
 
 
+async def setup_checkpointer() -> None:  # pragma: no cover
+    """
+    Setup AsyncPostgresSaver tables for agent checkpointing.
+    
+    This creates the necessary database tables for the LangGraph checkpointer.
+    Should be called once during application startup.
+    """
+    def _to_psycopg_url(url: str) -> str:
+        return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    
+    psycopg_url = _to_psycopg_url(str(settings.db_url))
+    
+    try:
+        async with AsyncPostgresSaver.from_conn_string(psycopg_url) as checkpointer:
+            await checkpointer.setup()
+            logger.info("AsyncPostgresSaver tables created successfully")
+    except Exception as e:
+        logger.warning(f"AsyncPostgresSaver setup failed (likely already exists): {e}")
+
+
 @asynccontextmanager
 async def lifespan_setup(
     app: FastAPI,
@@ -187,6 +208,7 @@ async def lifespan_setup(
     setup_opentelemetry(app)
     setup_langfuse()
     initialize_prompts()
+    await setup_checkpointer()
     init_redis(app)
     init_rabbit(app)
     setup_prometheus(app)

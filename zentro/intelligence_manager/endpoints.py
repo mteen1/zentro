@@ -5,6 +5,9 @@ from typing import List, Optional, cast, Any
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
+import json
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,7 +36,9 @@ from fastapi import HTTPException, status
 from pydantic import BaseModel
 
 # project-agent runner
-from zentro.intelligence_manager.project_agent.agent import get_chat_history, run_agent
+from zentro.intelligence_manager.project_agent.agent import get_chat_history, run_agent, stream_agent
+
+
 
 def translate_service_errors(fn: F) -> F:
     """
@@ -147,6 +152,88 @@ async def run_project_agent(
         "message": agent_result["message"],
         "thread_id": thread_id_to_use,
     }
+
+
+@router.post("/run/stream")
+@translate_service_errors
+async def run_project_agent_stream(
+    payload: AgentPromptIn,
+    current_user: User = Depends(get_current_user_db),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """
+    Run the project agent with streaming response (SSE).
+    """
+    thread_id_to_use = payload.thread_id
+    chat_obj = None
+
+    # If no thread_id, create a new chat for the user
+    if not thread_id_to_use:
+        new_thread_id = f"{current_user.id}:{uuid.uuid4().hex}"
+        chat_obj = Chat(
+            user_id=current_user.id,
+            thread_id=new_thread_id,
+            title=(
+                payload.prompt[:50] + "..."
+                if len(payload.prompt) > 50
+                else payload.prompt
+            ),
+        )
+        session.add(chat_obj)
+        await session.commit()
+        await session.refresh(chat_obj)
+        thread_id_to_use = new_thread_id
+    else:
+        stmt = select(Chat).where(
+            Chat.thread_id == thread_id_to_use,
+            Chat.user_id == current_user.id,
+        )
+        result = await session.execute(stmt)
+        chat_obj = result.scalar_one_or_none()
+
+        if not chat_obj:
+            raise HTTPException(
+                status_code=404,
+                detail="Chat not found or you do not have permission to access it.",
+            )
+
+    async def response_generator():
+        full_response = ""
+        
+        # Yield metadata event
+        yield f"event: metadata\ndata: {json.dumps({'thread_id': thread_id_to_use})}\n\n"
+        
+        try:
+            async for token in stream_agent(payload.prompt, thread_id=thread_id_to_use):
+                full_response += token
+                yield f"data: {json.dumps({'token': token})}\n\n"
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+            return
+
+        # Save messages to DB
+        try:
+            user_message = ChatMessage(
+                chat_id=chat_obj.id,
+                role=MessageRole.USER,
+                content=payload.prompt,
+            )
+            session.add(user_message)
+
+            assistant_message = ChatMessage(
+                chat_id=chat_obj.id,
+                role=MessageRole.ASSISTANT,
+                content=full_response,
+            )
+            session.add(assistant_message)
+            await session.commit()
+        except Exception as e:
+            # Log error but don't break the stream (it's already done)
+            logger.error(f"Failed to save messages: {e}")
+
+        yield "event: done\ndata: [DONE]\n\n"
+
+    return StreamingResponse(response_generator(), media_type="text/event-stream")
 
 
 @router.get("/chats", response_model=List[dict])
