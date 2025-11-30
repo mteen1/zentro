@@ -142,7 +142,7 @@ async def get_agent() -> Any:
     from zentro.settings import settings
 
     model = ChatOpenAI(
-        model="deepseek-ai/deepseek-v3.1-terminus",
+        model="deepseek-ai/deepseek-v3.1",
         base_url="https://integrate.api.nvidia.com/v1",
         api_key=settings.nvidia_api_key,  # type: ignore
     )
