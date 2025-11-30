@@ -42,7 +42,7 @@ async def task_create(
     title: str,
     session: Annotated[str | None, InjectedToolArg] = None,
     description: str | None = None,
-    status: str = "todo",
+    status: str = "draft",
     priority: str = "medium",
 ) -> str:
     """Create a task in a project .
@@ -60,6 +60,8 @@ async def task_create(
     IN_REVIEW = "in_review"
     DONE = "done"
     BLOCKED = "blocked"
+    
+    IMPORTANT: Always create tasks in 'draft' status first unless explicitly told otherwise.
     """
     from zentro.project_manager.services import create_task, TaskStatus, Priority
     from zentro.intelligence_manager.utils import get_current_user_id

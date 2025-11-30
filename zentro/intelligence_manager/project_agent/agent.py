@@ -257,10 +257,27 @@ async def stream_agent(prompt: str, thread_id: Optional[str] = None) -> Any:
         config["callbacks"] = [langfuse_handler]
 
     async for event in agent.astream_events(payload, config, version="v2"):
-        if event["event"] == "on_chat_model_stream":
+        kind = event["event"]
+
+        if kind == "on_chat_model_stream":
             chunk = event["data"]["chunk"]
             if chunk.content:
-                yield chunk.content
+                yield {"type": "token", "content": chunk.content}
+
+        elif kind == "on_tool_start":
+            # Filter out internal tools if needed, but for now we send all
+            yield {
+                "type": "tool_start",
+                "name": event["name"],
+                "input": event["data"].get("input"),
+            }
+
+        elif kind == "on_tool_end":
+            yield {
+                "type": "tool_end",
+                "name": event["name"],
+                "output": str(event["data"].get("output")),
+            }
 
 
 # Graceful shutdown
