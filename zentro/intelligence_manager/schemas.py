@@ -191,3 +191,16 @@ class ChatMessageOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class RunAgentResponse(BaseModel):
+    """Schema for the response from running the agent."""
+    message: str
+    thread_id: str
+
+
+class ChatOut(BaseModel):
+    """Schema for chat output."""
+    id: int
+    thread_id: str
+    title: str

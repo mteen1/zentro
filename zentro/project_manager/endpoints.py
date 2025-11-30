@@ -57,6 +57,10 @@ router = APIRouter()
     "",
     response_model=ProjectOut,
     status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"description": "Bad request"},
+        409: {"description": "Project with this key/name already exists"},
+    },
 )
 @translate_service_errors
 async def create_project(
@@ -64,7 +68,11 @@ async def create_project(
     current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Create a new project. Creator automatically becomes PROJECT_ADMIN."""
+    """
+    Create a new project.
+    
+    The creator automatically becomes the PROJECT_ADMIN.
+    """
     return await services.create_project(
         session,
         name=payload.name,
@@ -74,19 +82,35 @@ async def create_project(
     )
 
 
-@router.get("/{project_id}", response_model=ProjectOut)
+@router.get(
+    "/{project_id}",
+    response_model=ProjectOut,
+    responses={
+        404: {"description": "Project not found or permission denied"},
+    },
+)
 @translate_service_errors
 async def get_project(
     project_id: int,
     current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Get project details. Requires project access (any role)."""
+    """
+    Get project details.
+    
+    Requires project access (any role).
+    """
     await verify_project_access(project_id, current_user, session)
     return await services.get_project(session, project_id, load_children=False)
 
 
-@router.get("", response_model=List[ProjectOut])
+@router.get(
+    "",
+    response_model=List[ProjectOut],
+    responses={
+        200: {"description": "List of projects"},
+    },
+)
 @translate_service_errors
 async def list_projects(
     limit: int = 50,
@@ -94,7 +118,12 @@ async def list_projects(
     current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """List all projects the user has access to."""
+    """
+    List all projects the user has access to.
+    
+    - **limit**: Maximum number of projects to return.
+    - **offset**: Number of projects to skip.
+    """
     return await services.list_projects(
         session,
         user_id=current_user.id,
@@ -265,14 +294,41 @@ async def activate_sprint(
 # -----------------------
 # Task endpoints
 # -----------------------
-@router.post("/tasks", response_model=TaskOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/tasks",
+    response_model=TaskOut,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        404: {"description": "Project, Epic, Sprint, or Parent Task not found"},
+        403: {"description": "Permission denied (Requires REPORTER role)"},
+    },
+)
 @translate_service_errors
 async def create_task(
     payload: TaskCreate,
     current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Create task. Requires REPORTER or higher role."""
+    """
+    Create a new task in a project.
+    
+    Requires REPORTER or higher role in the project.
+    
+    **Allowed Status Values:**
+    - `draft`
+    - `todo`
+    - `in_progress`
+    - `in_review`
+    - `done`
+    - `blocked`
+    
+    **Allowed Priority Values:**
+    - `low`
+    - `medium`
+    - `high`
+    - `critical`
+    - `blocker`
+    """
     await verify_project_access(payload.project_id, current_user, session, ProjectRole.REPORTER)
     return await services.create_task(
         session,
@@ -292,19 +348,35 @@ async def create_task(
     )
 
 
-@router.get("/tasks/{task_id}", response_model=TaskOut)
+@router.get(
+    "/tasks/{task_id}",
+    response_model=TaskOut,
+    responses={
+        404: {"description": "Task not found or permission denied"},
+    },
+)
 @translate_service_errors
 async def get_task(
     task_id: int,
     current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Get task details. Requires project access."""
+    """
+    Get task details.
+    
+    Requires project access.
+    """
     await verify_task_access(task_id, current_user, session)
     return await services.get_task(session, task_id, load_relations=False)
 
 
-@router.get("/{project_id}/tasks", response_model=List[TaskOut])
+@router.get(
+    "/{project_id}/tasks",
+    response_model=List[TaskOut],
+    responses={
+        404: {"description": "Project not found or permission denied"},
+    },
+)
 @translate_service_errors
 async def list_tasks(
     project_id: int,
@@ -315,7 +387,14 @@ async def list_tasks(
     current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """List project tasks. Requires project access."""
+    """
+    List project tasks with optional filtering.
+    
+    - **status**: Filter by task status. Allowed values: `draft`, `todo`, `in_progress`, `in_review`, `done`, `blocked`.
+    - **priority**: Filter by task priority. Allowed values: `low`, `medium`, `high`, `critical`, `blocker`.
+    - **limit**: Maximum number of tasks to return.
+    - **offset**: Number of tasks to skip.
+    """
     await verify_project_access(project_id, current_user, session)
     return await services.list_tasks(
         session,
@@ -327,7 +406,14 @@ async def list_tasks(
     )
 
 
-@router.patch("/tasks/{task_id}", response_model=TaskOut)
+@router.patch(
+    "/tasks/{task_id}",
+    response_model=TaskOut,
+    responses={
+        404: {"description": "Task not found or permission denied"},
+        403: {"description": "Permission denied (Requires DEVELOPER role)"},
+    },
+)
 @translate_service_errors
 async def patch_task(
     task_id: int,
@@ -335,20 +421,50 @@ async def patch_task(
     current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Update task. Requires DEVELOPER or higher role."""
+    """
+    Update a task.
+    
+    Requires DEVELOPER or higher role.
+    
+    **Allowed Status Values:**
+    - `draft`
+    - `todo`
+    - `in_progress`
+    - `in_review`
+    - `done`
+    - `blocked`
+    
+    **Allowed Priority Values:**
+    - `low`
+    - `medium`
+    - `high`
+    - `critical`
+    - `blocker`
+    """
     await verify_task_access(task_id, current_user, session, ProjectRole.DEVELOPER)
     data = payload.model_dump(exclude_unset=True)
     return await services.update_task(session, task_id, **data)
 
 
-@router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/tasks/{task_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        404: {"description": "Task not found or permission denied"},
+        403: {"description": "Permission denied (Requires PROJECT_MANAGER role)"},
+    },
+)
 @translate_service_errors
 async def delete_task(
     task_id: int,
     current_user: User = Depends(get_current_user_db),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Delete task. Requires PROJECT_MANAGER or higher role."""
+    """
+    Delete a task.
+    
+    Requires PROJECT_MANAGER or higher role.
+    """
     await verify_task_access(task_id, current_user, session, ProjectRole.PROJECT_MANAGER)
     await services.delete_task(session, task_id)
 
