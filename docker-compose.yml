@@ -17,7 +17,7 @@ services:
     networks:
       - default
       - traefik-shared
-      - langfuse_langfuse
+      - zentro-shared
     depends_on:
       db:
         condition: service_healthy
@@ -109,6 +109,6 @@ networks:
   # Network for traefik.
   traefik-shared:
     name: traefik-shared
-  # Network for langfuse (external, created by langfuse docker-compose)
-  langfuse_langfuse:
-    external: true
+  zentro-shared:
+    name: zentro-shared
+    driver: bridge
