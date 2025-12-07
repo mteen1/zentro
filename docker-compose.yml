@@ -17,6 +17,7 @@ services:
     networks:
       - default
       - traefik-shared
+      - zentro-shared
     depends_on:
       db:
         condition: service_healthy
@@ -108,3 +109,6 @@ networks:
   # Network for traefik.
   traefik-shared:
     name: traefik-shared
+  zentro-shared:
+    name: zentro-shared
+    driver: bridge

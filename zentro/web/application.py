@@ -47,6 +47,7 @@ def get_app() -> FastAPI:
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",
         default_response_class=UJSONResponse,
+        # swagger_ui_parameters={"persistAuthorization": True} 
     )
 
     origins = settings.origins

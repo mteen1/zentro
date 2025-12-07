@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
+from langfuse import Langfuse
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -27,6 +28,10 @@ from zentro.services.rabbit.lifespan import init_rabbit, shutdown_rabbit
 from zentro.services.redis.lifespan import init_redis, shutdown_redis
 from zentro.settings import settings
 from zentro.tkq import broker
+from zentro.intelligence_manager.prompts import initialize_prompts
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+logger = logging.getLogger(__name__)
 
 
 def _setup_db(app: FastAPI) -> None:  # pragma: no cover
@@ -124,6 +129,33 @@ def stop_opentelemetry(app: FastAPI) -> None:  # pragma: no cover
     AioPikaInstrumentor().uninstrument()
 
 
+def setup_langfuse() -> None:  # pragma: no cover
+    """
+    Initialize Langfuse client.
+
+    This must be called during application startup to ensure
+    the Langfuse client is properly configured before any LLM calls.
+    """
+    if (
+        not settings.langfuse_host
+        or not settings.langfuse_public_key
+        or not settings.langfuse_secret_key
+    ):
+        logger.info("Langfuse not configured, skipping initialization")
+        return
+
+    try:
+        # Initialize the global Langfuse client
+        Langfuse(
+            public_key=settings.langfuse_public_key,
+            secret_key=settings.langfuse_secret_key,
+            host=settings.langfuse_host,
+        )
+        logger.info("Langfuse client initialized successfully")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Langfuse client: {e}")
+
+
 def setup_prometheus(app: FastAPI) -> None:  # pragma: no cover
     """
     Enables prometheus integration.
@@ -133,6 +165,26 @@ def setup_prometheus(app: FastAPI) -> None:  # pragma: no cover
     PrometheusFastApiInstrumentator(should_group_status_codes=False).instrument(
         app,
     ).expose(app, should_gzip=True, name="prometheus_metrics")
+
+
+async def setup_checkpointer() -> None:  # pragma: no cover
+    """
+    Setup AsyncPostgresSaver tables for agent checkpointing.
+    
+    This creates the necessary database tables for the LangGraph checkpointer.
+    Should be called once during application startup.
+    """
+    def _to_psycopg_url(url: str) -> str:
+        return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    
+    psycopg_url = _to_psycopg_url(str(settings.db_url))
+    
+    try:
+        async with AsyncPostgresSaver.from_conn_string(psycopg_url) as checkpointer:
+            await checkpointer.setup()
+            logger.info("AsyncPostgresSaver tables created successfully")
+    except Exception as e:
+        logger.warning(f"AsyncPostgresSaver setup failed (likely already exists): {e}")
 
 
 @asynccontextmanager
@@ -154,6 +206,9 @@ async def lifespan_setup(
         await broker.startup()
     _setup_db(app)
     setup_opentelemetry(app)
+    setup_langfuse()
+    initialize_prompts()
+    await setup_checkpointer()
     init_redis(app)
     init_rabbit(app)
     setup_prometheus(app)
