@@ -1,47 +1,51 @@
-# zentro
+# zentro - agentic task management system
 
-This project was generated using fastapi_template.
+Tired of Jira's complexity? Meet zentro, a lightweight task management system designed for simplicity and efficiency. Built with FastAPI and SQLAlchemy, zentro offers a streamlined experience, but everything is **agent first**.
 
-## Poetry
+## list of features
 
-This project uses poetry. It's a modern dependency management
-tool.
+### Basic Tasks management(Jira like):
+* CRUD operations for tasks.
+* Task assignment to users.
+* Due dates for tasks.
 
-To run the project use this set of commands:
+* Sprints management.
+* Project management.
+* Epic management.
+* User management.
+* Granular permissions system.
 
+### Redis, RabbitMQ support for background tasks.
+* Integration with Redis for caching and fast data retrieval.
+* Integration with RabbitMQ for handling background tasks and asynchronous processing.
+
+### Monitoring with OpenTelemetry, Prometheus, Jaeger and LangFuse(for agent monitoring).
+* OpenTelemetry integration for distributed tracing and metrics collection.
+* Prometheus integration for monitoring and alerting.
+* Jaeger integration for tracing and performance analysis.
+* LangFuse integration for granular monitoring of agent activities, llm usage and prompt performance and more.
+
+
+### Agentic capabilities:
+- [X] CRUD operations for tasks using `/agents/run` endpoint.
+
+
+
+
+
+
+## Development
+
+For easier setup you could can download and install the "Justfile" an alternative to Makefile. with easier syntax and user experience.
+
+download it from: 
+https://github.com/casey/just
+
+now you can run the project with:
 ```bash
-poetry install
-poetry run python -m zentro
+just dev
 ```
 
-This will start the server on the configured host.
-
-You can find swagger documentation at `/api/docs`.
-
-You can read more about poetry here: https://python-poetry.org/
-
-## Docker
-
-You can start the project with docker using this command:
-
-```bash
-docker-compose up --build
-```
-
-If you want to develop in docker with autoreload and exposed ports add `-f deploy/docker-compose.dev.yml` to your docker command.
-Like this:
-
-```bash
-docker-compose -f docker-compose.yml -f deploy/docker-compose.dev.yml --project-directory . up --build
-```
-
-This command exposes the web application on port 8000, mounts current directory and enables autoreload.
-
-But you have to rebuild image every time you modify `poetry.lock` or `pyproject.toml` with this command:
-
-```bash
-docker-compose build
-```
 
 ## Project structure
 
