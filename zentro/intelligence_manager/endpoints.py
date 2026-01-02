@@ -42,7 +42,6 @@ from pydantic import BaseModel
 from zentro.intelligence_manager.project_agent.agent import get_chat_history, run_agent, stream_agent
 
 
-
 def translate_service_errors(fn: F) -> F:
     """
     Decorator which translates service exceptions into HTTPExceptions while
@@ -282,9 +281,7 @@ async def get_user_chats(
 ):
     """Get a list of all chats for the currently authenticated user."""
 
-    stmt = select(Chat).where(Chat.user_id == current_user.id).order_by(Chat.id.desc())
-    result = await session.execute(stmt)
-    chats = result.scalars().all()
+    chats = await services.list_user_chats(session, current_user.id)
 
     # Format the response for the client
     return [
@@ -311,19 +308,10 @@ async def get_chat_history_endpoint(
     session: AsyncSession = Depends(get_db_session),
 ):
     """Get the chat history for a specific thread_id."""
-    # Verify the chat belongs to the current user
-    stmt = select(Chat).where(
-        Chat.thread_id == thread_id,
-        Chat.user_id == current_user.id,
+    # Verify the chat belongs to the current user and is not deleted
+    chat = await services.get_chat_by_thread_id(
+        session, thread_id, user_id=current_user.id
     )
-    result = await session.execute(stmt)
-    chat = result.scalar_one_or_none()
-
-    if not chat:
-        raise HTTPException(
-            status_code=404,
-            detail="Chat not found or you do not have permission to access it.",
-        )
 
     # Get all messages for this chat, ordered by creation time
     stmt = (
@@ -335,3 +323,29 @@ async def get_chat_history_endpoint(
     messages = result.scalars().all()
 
     return messages
+
+
+@router.delete(
+    "/chats/{chat_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        204: {"description": "Chat deleted successfully"},
+        404: {"description": "Chat not found or permission denied"},
+    },
+)
+@translate_service_errors
+async def delete_chat(
+    chat_id: int,
+    current_user: User = Depends(get_current_user_db),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """
+    Soft delete a chat.
+
+    - **chat_id**: The ID of the chat to delete.
+
+    Only the owner of the chat can delete it.
+    """
+    # Soft delete the chat (verifies ownership)
+    await services.soft_delete_chat(session, chat_id, user_id=current_user.id)
+    await session.commit()

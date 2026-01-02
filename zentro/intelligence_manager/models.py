@@ -5,7 +5,7 @@ from datetime import datetime
 import enum
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Text, String
+from sqlalchemy import DateTime, ForeignKey, Integer, Text, String, Boolean
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -77,6 +77,8 @@ class Chat(Base):
     title: Mapped[Optional[str]] = mapped_column(
         Text, default="New Chat"
     )  # Optional: Auto-generate from first message
+
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
     # Relationship back to user (if needed)
     user = relationship("User", back_populates="chats")
