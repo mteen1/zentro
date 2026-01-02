@@ -7,7 +7,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from zentro.intelligence_manager.models import FollowUpStatus, TaskFollowUp
+from zentro.intelligence_manager.models import FollowUpStatus, TaskFollowUp, Chat
 from zentro.project_manager.models import Task, User
 from zentro.utils import NotFound, _get_or_404
 
@@ -373,3 +373,105 @@ async def run_in_transaction(session: AsyncSession, coro):
     """
     async with session.begin():
         return await coro(session)
+
+
+# ---- Chat Management (Soft Delete) ----
+async def get_chat(
+    session: AsyncSession,
+    chat_id: int,
+    /,
+    *,
+    user_id: Optional[int] = None,
+) -> Chat:
+    """Get a specific chat by ID. Optionally verify it belongs to a user. Returns only non-deleted chats."""
+    q = select(Chat).where(Chat.id == chat_id, Chat.deleted == False)
+
+    if user_id is not None:
+        q = q.where(Chat.user_id == user_id)
+
+    result = await session.execute(q)
+    chat = result.scalars().first()
+    if chat is None:
+        raise NotFound("Chat not found")
+    return chat
+
+
+async def get_chat_by_thread_id(
+    session: AsyncSession,
+    thread_id: str,
+    /,
+    *,
+    user_id: Optional[int] = None,
+) -> Chat:
+    """Get a chat by thread_id. Optionally verify it belongs to a user. Returns only non-deleted chats."""
+    q = select(Chat).where(Chat.thread_id == thread_id, Chat.deleted == False)
+
+    if user_id is not None:
+        q = q.where(Chat.user_id == user_id)
+
+    result = await session.execute(q)
+    chat = result.scalars().first()
+    if chat is None:
+        raise NotFound("Chat not found")
+    return chat
+
+
+async def list_user_chats(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+) -> List[Chat]:
+    """List all non-deleted chats for a user, ordered by most recent."""
+    q = (
+        select(Chat)
+        .where(Chat.user_id == user_id, Chat.deleted == False)
+        .order_by(Chat.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await session.execute(q)
+    return result.scalars().all()
+
+
+async def soft_delete_chat(
+    session: AsyncSession,
+    chat_id: int,
+    /,
+    *,
+    user_id: Optional[int] = None,
+) -> Chat:
+    """Soft delete a chat by marking it as deleted. Optionally verify ownership."""
+    chat = await get_chat(session, chat_id, user_id=user_id)
+    chat.deleted = True
+    session.add(chat)
+    await session.flush()
+    await session.refresh(chat)
+    return chat
+
+
+async def restore_chat(
+    session: AsyncSession,
+    chat_id: int,
+    /,
+    *,
+    user_id: Optional[int] = None,
+) -> Chat:
+    """Restore a soft-deleted chat."""
+    # For restore, we need to query without the deleted filter
+    q = select(Chat).where(Chat.id == chat_id)
+
+    if user_id is not None:
+        q = q.where(Chat.user_id == user_id)
+
+    result = await session.execute(q)
+    chat = result.scalars().first()
+    if chat is None:
+        raise NotFound("Chat not found")
+
+    chat.deleted = False
+    session.add(chat)
+    await session.flush()
+    await session.refresh(chat)
+    return chat
