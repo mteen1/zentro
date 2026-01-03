@@ -34,7 +34,6 @@ from zentro.intelligence_manager.project_agent.tools import (
 )
 
 
-
 # Global singletons
 _agent: Optional[Any] = None
 _checkpointer: Optional[AsyncPostgresSaver] = None
@@ -144,7 +143,8 @@ async def get_agent() -> Any:
     model = ChatOpenAI(
         model="deepseek-ai/deepseek-v3.1",
         base_url="https://integrate.api.nvidia.com/v1",
-        api_key=settings.nvidia_api_key,  # type: ignore
+        api_key=settings.nvidia_api_key,  # type: ignore,
+        max_tokens=150000,
     )
 
     # Get Langfuse handler if configured
