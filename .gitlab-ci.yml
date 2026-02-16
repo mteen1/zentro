@@ -1,35 +1,55 @@
-#stages:
-#  - "test"
+# #stages:
+# #  - "test"
 
-.test-template:
-  stage: test
-  image: python:3.11.4-slim-bullseye
-  tags:
-    - kubernetes-runner
-    - docker-runner
-  except:
-    - tags
+# .test-template:
+#   stage: test
+#   image: python:3.11.4-slim-bullseye
+#   tags:
+#     - kubernetes-runner
+#     - docker-runner
+#   except:
+#     - tags
+#   before_script:
+#     - apt update && apt install -y git
+#     - pip install poetry==1.8.2
+#     - poetry config virtualenvs.create false
+#     - poetry install
+
+# black:
+#   extends:
+#     - .test-template
+#   script:
+#     - pre-commit run black -a
+
+# ruff:
+#   extends:
+#     - .test-template
+#   script:
+#     - pre-commit run ruff -a
+
+# mypy:
+#   extends:
+#     - .test-template
+#   script:
+#     - pre-commit run ruff -a
+
+stages: [build]
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+
+build_and_push:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   before_script:
-    - apt update && apt install -y git
-    - pip install poetry==1.8.2
-    - poetry config virtualenvs.create false
-    - poetry install
-
-black:
-  extends:
-    - .test-template
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
-    - pre-commit run black -a
-
-ruff:
-  extends:
-    - .test-template
-  script:
-    - pre-commit run ruff -a
-
-mypy:
-  extends:
-    - .test-template
-  script:
-    - pre-commit run ruff -a
+    - docker build -t "$CI_REGISTRY_IMAGE:sha-$CI_COMMIT_SHORT_SHA" -t "$CI_REGISTRY_IMAGE:prod" .
+    - docker push "$CI_REGISTRY_IMAGE:sha-$CI_COMMIT_SHORT_SHA"
+    - docker push "$CI_REGISTRY_IMAGE:prod"
 
