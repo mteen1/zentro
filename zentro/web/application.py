@@ -10,6 +10,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
 from zentro.settings import settings
+from zentro.agent_manager.endpoints import public_router as agent_public_router
 from zentro.web.api.router import api_router
 from zentro.web.lifespan import lifespan_setup
 
@@ -61,5 +62,6 @@ def get_app() -> FastAPI:
 
     # Main router for the API.
     app.include_router(router=api_router, prefix="/api")
+    app.include_router(router=agent_public_router)
 
     return app
