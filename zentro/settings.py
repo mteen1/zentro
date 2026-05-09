@@ -41,7 +41,12 @@ class Settings(BaseSettings):
 
     log_level: LogLevel = LogLevel.INFO
 
-    app_names: List[str] = ["db", "project_manager", "intelligence_manager"]
+    app_names: List[str] = [
+        "db",
+        "project_manager",
+        "intelligence_manager",
+        "agent_manager",
+    ]
 
     # Variables for the database
     db_host: str = "127.0.0.1"
