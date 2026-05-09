@@ -1,7 +1,7 @@
 """add agent task coordination tables.
 
 Revision ID: 9c0b79d1f3aa
-Revises: fb88f2600f1c
+Revises: add_soft_delete_chats
 Create Date: 2026-05-09 12:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "9c0b79d1f3aa"
-down_revision = "fb88f2600f1c"
+down_revision = "add_soft_delete_chats"
 branch_labels = None
 depends_on = None
 
@@ -309,4 +309,3 @@ def downgrade() -> None:
     op.drop_table("agent_skills")
     op.drop_index(op.f("ix_agent_profiles_slug"), table_name="agent_profiles")
     op.drop_table("agent_profiles")
-

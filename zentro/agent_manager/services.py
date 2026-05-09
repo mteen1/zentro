@@ -496,6 +496,23 @@ async def add_message(
     return message
 
 
+async def list_messages(
+    session: AsyncSession,
+    *,
+    task_link_id: int,
+    limit: int = 100,
+) -> list[AgentMessage]:
+    await get_agent_task(session, task_link_id)
+    stmt = (
+        select(AgentMessage)
+        .where(AgentMessage.task_link_id == task_link_id)
+        .order_by(AgentMessage.created_at)
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def add_artifact(
     session: AsyncSession,
     *,
@@ -542,6 +559,23 @@ async def add_artifact(
     )
     await session.refresh(artifact)
     return artifact
+
+
+async def list_artifacts(
+    session: AsyncSession,
+    *,
+    task_link_id: int,
+    limit: int = 100,
+) -> list[AgentArtifact]:
+    await get_agent_task(session, task_link_id)
+    stmt = (
+        select(AgentArtifact)
+        .where(AgentArtifact.task_link_id == task_link_id)
+        .order_by(AgentArtifact.created_at)
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
 
 
 async def list_events(
