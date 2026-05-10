@@ -1,3 +1,7 @@
+[▶ Watch the Zentro demo video](https://drive.google.com/file/d/1Sg-xBoOBvoNZ5LwCoLAwT9rvtjgYMyaA/view?usp=sharing)
+
+Powered by NotebookLM.
+
 # Zentro
 
 Zentro is a FastAPI backend for agentic project management. It keeps the normal
@@ -228,4 +232,3 @@ docs/
 tests/
   API and service tests
 ```
-
