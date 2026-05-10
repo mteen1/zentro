@@ -1,146 +1,231 @@
-# zentro - agentic task management system
+# Zentro
 
-![LangChain](https://img.shields.io/badge/langchain-%231C3C3C.svg?style=for-the-badge&logo=langchain&logoColor=white) ![LangGraph](https://img.shields.io/badge/langgraph-%231C3C3C.svg?style=for-the-badge&logo=langgraph&logoColor=white) ![Langfuse](https://img.shields.io/badge/LANGFUSE-8A2BE2) ![DeepSeek](https://custom-icon-badges.demolab.com/badge/Deepseek-4D6BFF?logo=deepseek&logoColor=fff)
-![Nvidia](https://img.shields.io/badge/NVIDIA-76B900?logo=nvidia&logoColor=fff)
+Zentro is a FastAPI backend for agentic project management. It keeps the normal
+project-management model - projects, epics, sprints, tasks, users, roles, and
+permissions - and adds an internal agent-to-agent coordination layer for
+delegating and auditing task delivery.
 
-Tired of Jira's complexity? zentro is a smaller, easier-to-use task management system built with FastAPI and SQLAlchemy. It focuses on straightforward task and project workflows and includes optional integrations for background processing and observability.
+The frontend lives in a separate repository. This repository is the API,
+database, migrations, background worker, and agent coordination backend.
 
-Maintained by an engineer who has worked with real-world stacks (message brokers, tracing, reverse proxies). The README keeps things practical and focused — no marketing fluff.
+## Why It Exists
 
-### List of features
+Most project tools assume a human is the primary worker. Zentro is designed for a
+mixed team where humans define goals and constraints, while agents can claim,
+delegate, execute, block, review, and hand off work with a durable audit trail.
 
-Basic task and project management:
-- CRUD operations for tasks
-- Task assignment to users
-- Due dates, sprints, epics and projects
-- User management and permissions
+The current A2A layer is intentionally internal-first. It borrows the useful
+shape of the Agent2Agent protocol - agent cards, task state, messages, parts,
+artifacts, and event history - without committing early to every external
+protocol edge case.
 
-Background processing:
-- Optional Redis integration for caching and simple pub/sub
-- Optional RabbitMQ integration for background jobs
+## Highlights
 
-Monitoring and tracing:
-- Optional OpenTelemetry support (can be run with the provided OTLP docker-compose)
-- Optional Prometheus and Jaeger support for metrics and traces
-- Optional Langfuse support for detailed agent traces
+- FastAPI API with SQLAlchemy async models and Alembic migrations.
+- JWT auth, users, project roles, and project/task permissions.
+- Project management primitives: projects, epics, sprints, tasks, priorities,
+  task status, task assignment, and reporting endpoints.
+- Project agent endpoints with streaming and non-streaming responses.
+- Agent registry with searchable skills and public agent cards.
+- Agent task links that map canonical Zentro tasks to A2A-style protocol state.
+- Durable agent messages and artifacts linked to project tasks.
+- Append-only CloudEvents-style audit events for handoffs and task activity.
+- Redis, RabbitMQ, Taskiq, OpenTelemetry, Prometheus, Jaeger, and Langfuse
+  integration points.
+- Dockerized local development and GitLab CI image publishing.
 
-Agent capabilities
-- Project agent: a programmatic agent that can read and change project data using a small set of tools
-- Persistent async checkpointer: keeps a connection open to store agent conversations and state
-- Optional Langfuse callback handler for agent traces when configured
-- Streaming and non-streaming agent APIs: `run_agent`, `stream_agent`, `get_chat_history`, `shutdown_agent`
-- Supported tools include project and task operations such as: `project_get`, `project_list`, `project_members_list`, `task_create`, `task_get`, `task_update`, `task_delete`, `task_assign`, `task_unassign`, `task_list_my`, `task_search`, `task_stats_by_status`, `epic_list`, `epic_get`, `sprint_list`, `sprint_get_active`
+## Architecture
 
-Notes about the agent:
-- The agent uses a configurable model client and an AsyncPostgresSaver checkpointer opened in the background to persist conversation state.
-- Langfuse integration and the model endpoint are optional and enabled by environment variables.
- - The agent uses a configurable model client and an AsyncPostgresSaver checkpointer opened in the background to persist conversation state.
- - By default the project is set up to use NVIDIA as a model provider (DeepSeek) via the configured API endpoint; this is configurable through environment variables.
- - Langfuse integration and the model endpoint are optional and enabled by environment variables.
- - Traefik is used as the reverse proxy in the included deployment compose files.
-
-
-
-
-
-
-
-
-## Development
-
-This repo includes a `Justfile` as a convenience for common development commands.
-
-Install `just` from https://github.com/casey/just and run the app in development with:
-
-```bash
-just dev # for development
-just install # for local installation using poetry
-just test # for running tessts inside docker
+```text
+Client / Frontend
+      |
+      v
+FastAPI application
+      |
+      +-- auth
+      +-- project_manager
+      |     projects, epics, sprints, tasks, roles, permissions
+      |
+      +-- intelligence_manager
+      |     project agent, chat history, streaming responses, Langfuse hooks
+      |
+      +-- agent_manager
+      |     agent registry, task links, messages, artifacts, handoffs, events
+      |
+      +-- services
+            Redis, RabbitMQ, Taskiq worker integrations
 ```
 
+Database migrations live in `zentro/db/migrations`. Models are loaded from the
+configured app list in `zentro/settings.py`.
 
-## Project structure
+## Quickstart
 
-The `zentro` package contains the application code. Key directories and files:
+Start the full local stack:
 
 ```bash
-zentro/
-- auth/           # auth endpoints and dependencies
-- db/             # database setup, models and migrations
-- intelligence_manager/  # project agent, prompts, tools and services
-- project_manager/ # project-related business logic
-- services/       # redis, rabbit and other integrations
-- web/            # FastAPI application and API router
-__main__.py       # start the app with uvicorn
-settings.py       # configuration (uses pydantic BaseSettings)
-tests/            # unit and integration tests
+docker compose -f docker-compose.yml -f deploy/docker-compose.dev.yml up -d
+```
+
+Open the API docs:
+
+```text
+http://127.0.0.1:8000/api/docs
+```
+
+Run tests inside Docker:
+
+```bash
+docker compose -f docker-compose.yml -f deploy/docker-compose.dev.yml run --rm --no-deps api pytest -q
+```
+
+Run the A2A product demo against the local API:
+
+```bash
+python scripts/a2a_demo.py
+```
+
+Or with `just`:
+
+```bash
+just demo-a2a
+```
+
+The demo script registers a temporary user, creates a project and task, registers
+planner/backend agents, creates an agent task link, delegates work, accepts the
+handoff, writes an agent message, publishes a test-report artifact, and prints
+the resulting event timeline/read model.
+
+## A2A Demo Flow
+
+The shortest reviewer path is:
+
+1. Start the stack.
+2. Run `python scripts/a2a_demo.py`.
+3. Open `/api/docs`.
+4. Inspect the printed agent task, messages, artifacts, and events.
+
+Core endpoints:
+
+```http
+GET    /.well-known/agent-card.json
+GET    /api/agents
+POST   /api/agents
+GET    /api/agents/{agent_id}/card
+POST   /api/projects/{project_id}/agent-tasks
+GET    /api/projects/{project_id}/agent-tasks
+GET    /api/projects/{project_id}/agent-activity
+GET    /api/agent-tasks/{task_link_id}
+POST   /api/agent-tasks/{task_link_id}/delegate
+POST   /api/agent-tasks/{task_link_id}/accept
+POST   /api/agent-tasks/{task_link_id}/reject
+POST   /api/agent-tasks/{task_link_id}/cancel
+POST   /api/agent-tasks/{task_link_id}/messages
+GET    /api/agent-tasks/{task_link_id}/messages
+POST   /api/agent-tasks/{task_link_id}/artifacts
+GET    /api/agent-tasks/{task_link_id}/artifacts
+GET    /api/agent-tasks/{task_link_id}/events
+```
+
+More detail is in `docs/a2a-demo-flow.md`.
+
+## CI/CD And Deployment
+
+GitLab CI builds and pushes Docker images from `main`:
+
+```text
+registry.gitlab.com/m.moharami/zentro:sha-<commit>
+registry.gitlab.com/m.moharami/zentro:prod
+```
+
+The deployment repository at `../zentro-deploy` consumes the `:prod` image as
+`ZENTRO_API_IMAGE=registry.gitlab.com/m.moharami/zentro:prod` in
+`env/apps.env`. Its compose setup runs the API, Taskiq worker, Postgres, Redis,
+RabbitMQ, Traefik routing, and the separate frontend image.
+
+## Development Commands
+
+```bash
+just install      # poetry install
+just dev          # docker compose development stack with source mounted
+just test         # dockerized test run
+just demo-a2a     # run the A2A demo script against localhost:8000
+```
+
+Without `just`, use Poetry or Docker directly:
+
+```bash
+poetry install
+poetry run pytest
+docker compose -f docker-compose.yml -f deploy/docker-compose.dev.yml up -d
 ```
 
 ## Configuration
 
-Configure the application with environment variables. By default, settings use the `ZENTRO_` prefix.
-
-Create a `.env` file in the project root and set values such as database URL, API keys and other flags. For example:
+Settings use the `ZENTRO_` environment variable prefix. Common values:
 
 ```bash
-ZENTRO_RELOAD=True
+ZENTRO_HOST=0.0.0.0
 ZENTRO_PORT=8000
 ZENTRO_ENVIRONMENT=dev
-ZENTRO_DB_URL=postgresql+asyncpg://zentro:zentro@localhost:5432/zentro
-ZENTRO_NVIDIA_API_KEY=<your-key>
+ZENTRO_DB_HOST=zentro-db
+ZENTRO_DB_PORT=5432
+ZENTRO_DB_USER=zentro
+ZENTRO_DB_PASS=zentro
+ZENTRO_DB_BASE=zentro
+ZENTRO_REDIS_HOST=zentro-redis
+ZENTRO_RABBIT_HOST=zentro-rmq
+ZENTRO_NVIDIA_API_KEY=<optional-model-key>
+ZENTRO_LANGFUSE_HOST=<optional-langfuse-host>
 ```
 
-See `zentro/settings.py` for available settings and the `env_prefix` if you need to change the prefix.
-## OpenTelemetry
-
-To run the OpenTelemetry collector and Jaeger alongside the app, add the OTLP compose file:
-
-```bash
-docker-compose -f docker-compose.yml -f deploy/docker-compose.otlp.yml --project-directory . up
-```
-
-Tracing UI is available at Jaeger (typically http://localhost:16686). This compose setup is intended for development and demos.
-
-## Demo
-
-### Soon...
-
- For now, see the `zentro/intelligence_manager/project_agent/agent.py` file for the agent behavior and available tools. or run locally and start chatting with the agent!
-
-## Pre-commit
-If you like to be sure your code is consistently formatted and checked before committing, you can use pre-commit hooks.
-
-Install the project's pre-commit hooks with:
-
-```bash
-pre-commit install
-```
-
-Hooks include formatters and linters such as `black`, `mypy`, and `ruff`.
+See `zentro/settings.py` for the full list.
 
 ## Migrations
 
-Use `alembic` for database migrations. Examples:
-
 ```bash
-# Apply migrations up to a specific revision
-alembic upgrade "<revision_id>"
-
-# Apply all pending migrations
 alembic upgrade head
-```
-
-To revert:
-
-```bash
 alembic downgrade <revision_id>
-alembic downgrade base
+alembic revision --autogenerate -m "describe change"
 ```
 
-To generate a revision:
+The local Docker compose includes a migrator service for applying migrations in
+the containerized stack.
+
+## Observability
+
+OpenTelemetry collector and Jaeger can run alongside the app:
 
 ```bash
-alembic revision --autogenerate
-alembic revision
+docker compose -f docker-compose.yml -f deploy/docker-compose.otlp.yml up
+```
+
+Jaeger is typically available at:
+
+```text
+http://127.0.0.1:16686
+```
+
+Langfuse tracing is enabled when the Langfuse environment variables are
+configured.
+
+## Repository Map
+
+```text
+zentro/
+  agent_manager/        A2A-inspired registry, task links, events, messages
+  auth/                 JWT auth endpoints and dependencies
+  db/                   SQLAlchemy base, migrations, models, DAO helpers
+  intelligence_manager/ Project agent, prompts, tools, chat services
+  project_manager/      Projects, epics, sprints, tasks, roles, permissions
+  services/             Redis and RabbitMQ integrations
+  web/                  FastAPI application and API routers
+scripts/
+  a2a_demo.py           End-to-end A2A API demo script
+docs/
+  agent-to-agent-platform-design.md
+  a2a-demo-flow.md
+tests/
+  API and service tests
 ```
 

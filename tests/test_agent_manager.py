@@ -125,3 +125,16 @@ async def test_agent_task_handoff_message_artifact_and_events(
     ).scalars().all()
     assert {msg.message_id for msg in messages} >= {"msg-initial", message.message_id}
 
+    persisted_messages = await agent_services.list_messages(
+        dbsession,
+        task_link_id=task_link.id,
+    )
+    persisted_artifacts = await agent_services.list_artifacts(
+        dbsession,
+        task_link_id=task_link.id,
+    )
+    assert [msg.message_id for msg in persisted_messages] == [
+        "msg-initial",
+        message.message_id,
+    ]
+    assert [item.artifact_id for item in persisted_artifacts] == [artifact.artifact_id]

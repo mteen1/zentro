@@ -16,6 +16,10 @@ test:
     docker compose run --build --rm api pytest -vv .
     docker compose down
 
+# Run the agent-to-agent API demo against a running local API.
+demo-a2a:
+    python scripts/a2a_demo.py
+
 # pulls from repo
 pull:
     git pull

@@ -204,6 +204,26 @@ async def create_agent_message(
     )
 
 
+@router.get(
+    "/agent-tasks/{task_link_id}/messages",
+    response_model=list[AgentMessageOut],
+)
+@translate_service_errors
+async def list_agent_messages(
+    task_link_id: int,
+    limit: int = 100,
+    current_user: User = Depends(get_current_user_db),
+    session: AsyncSession = Depends(get_db_session),
+):
+    task_link = await services.get_agent_task(session, task_link_id)
+    await verify_task_access(task_link.task_id, current_user, session)
+    return await services.list_messages(
+        session,
+        task_link_id=task_link_id,
+        limit=limit,
+    )
+
+
 @router.post("/agent-tasks/{task_link_id}/artifacts", response_model=AgentArtifactOut)
 @translate_service_errors
 async def create_agent_artifact(
@@ -223,6 +243,26 @@ async def create_agent_artifact(
         uri=payload.uri,
         created_by_agent_id=payload.created_by_agent_id,
         artifact_id=payload.artifact_id,
+    )
+
+
+@router.get(
+    "/agent-tasks/{task_link_id}/artifacts",
+    response_model=list[AgentArtifactOut],
+)
+@translate_service_errors
+async def list_agent_artifacts(
+    task_link_id: int,
+    limit: int = 100,
+    current_user: User = Depends(get_current_user_db),
+    session: AsyncSession = Depends(get_db_session),
+):
+    task_link = await services.get_agent_task(session, task_link_id)
+    await verify_task_access(task_link.task_id, current_user, session)
+    return await services.list_artifacts(
+        session,
+        task_link_id=task_link_id,
+        limit=limit,
     )
 
 
@@ -305,4 +345,3 @@ async def list_agent_task_events(
         task_link_id=task_link_id,
         limit=limit,
     )
-
