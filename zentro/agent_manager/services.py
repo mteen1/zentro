@@ -19,6 +19,8 @@ from zentro.agent_manager.models import (
     AgentTaskLink,
 )
 from zentro.project_manager.enums import TaskStatus
+import json
+from redis.asyncio import Redis, ConnectionPool
 from zentro.project_manager.models import Project, Task
 from zentro.utils import Conflict, NotFound
 
@@ -223,6 +225,7 @@ async def append_event(
     correlation_id: str | None = None,
     causation_id: str | None = None,
     payload: dict[str, Any] | None = None,
+    redis_pool: ConnectionPool | None = None,
 ) -> AgentEvent:
     source_agent_slug = None
     if source_agent_id is not None:
@@ -252,6 +255,27 @@ async def append_event(
     )
     session.add(event)
     await session.flush()
+
+    if redis_pool is not None:
+        async with Redis(connection_pool=redis_pool) as redis:
+            try:
+                event_dict = {
+                    "id": event.id,
+                    "project_id": event.project_id,
+                    "task_id": event.task_id,
+                    "task_link_id": event.task_link_id,
+                    "type": event.type,
+                    "payload": event.payload,
+                    "created_at": event.created_at.isoformat() if hasattr(event, 'created_at') and event.created_at else None
+                }
+                await redis.publish(
+                    f"project_events:{project_id}",
+                    json.dumps(event_dict)
+                )
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to publish event to Redis: {e}")
+
     return event
 
 
@@ -267,6 +291,7 @@ async def create_agent_task(
     delegated_by_user_id: int | None = None,
     requires_human_approval: bool = False,
     message: dict[str, Any] | None = None,
+    redis_pool: ConnectionPool | None = None,
 ) -> AgentTaskLink:
     task = await _get_task_in_project(session, project_id, task_id)
     if active_agent_id is not None:
@@ -306,6 +331,7 @@ async def create_agent_task(
             "state": task_link.state,
             "active_agent_id": active_agent_id,
         },
+        redis_pool=redis_pool,
     )
 
     if message is not None:
@@ -336,6 +362,7 @@ async def delegate_agent_task(
     handoff_summary: str | None = None,
     correlation_id: str | None = None,
     causation_id: str | None = None,
+    redis_pool: ConnectionPool | None = None,
 ) -> AgentTaskLink:
     task_link = await get_agent_task(session, task_link_id)
     task = await session.get(Task, task_link.task_id)
@@ -369,13 +396,14 @@ async def delegate_agent_task(
             "reason": reason,
             "handoff_summary": handoff_summary,
         },
+        redis_pool=redis_pool,
     )
     await session.flush()
     await session.refresh(task_link)
     return task_link
 
 
-async def accept_agent_task(session: AsyncSession, *, task_link_id: int) -> AgentTaskLink:
+async def accept_agent_task(session: AsyncSession, *, task_link_id: int, redis_pool: ConnectionPool | None = None) -> AgentTaskLink:
     task_link = await get_agent_task(session, task_link_id)
     task = await session.get(Task, task_link.task_id)
     if task is None:
@@ -391,6 +419,7 @@ async def accept_agent_task(session: AsyncSession, *, task_link_id: int) -> Agen
         event_type=_event_type("accepted"),
         target_agent_id=task_link.active_agent_id,
         payload={"task_link_id": task_link.id, "state": task_link.state},
+        redis_pool=redis_pool,
     )
     await session.flush()
     await session.refresh(task_link)
@@ -402,6 +431,7 @@ async def reject_agent_task(
     *,
     task_link_id: int,
     reason: str | None = None,
+    redis_pool: ConnectionPool | None = None,
 ) -> AgentTaskLink:
     task_link = await get_agent_task(session, task_link_id)
     task = await session.get(Task, task_link.task_id)
@@ -418,13 +448,14 @@ async def reject_agent_task(
         event_type=_event_type("rejected"),
         target_agent_id=task_link.active_agent_id,
         payload={"task_link_id": task_link.id, "state": task_link.state, "reason": reason},
+        redis_pool=redis_pool,
     )
     await session.flush()
     await session.refresh(task_link)
     return task_link
 
 
-async def cancel_agent_task(session: AsyncSession, *, task_link_id: int) -> AgentTaskLink:
+async def cancel_agent_task(session: AsyncSession, *, task_link_id: int, redis_pool: ConnectionPool | None = None) -> AgentTaskLink:
     task_link = await get_agent_task(session, task_link_id)
     task = await session.get(Task, task_link.task_id)
     if task is None:
@@ -440,6 +471,7 @@ async def cancel_agent_task(session: AsyncSession, *, task_link_id: int) -> Agen
         event_type=_event_type("cancelled"),
         target_agent_id=task_link.active_agent_id,
         payload={"task_link_id": task_link.id, "state": task_link.state},
+        redis_pool=redis_pool,
     )
     await session.flush()
     await session.refresh(task_link)
@@ -456,6 +488,7 @@ async def add_message(
     sender_user_id: int | None = None,
     message_id: str | None = None,
     emit_event: bool = True,
+    redis_pool: ConnectionPool | None = None,
 ) -> AgentMessage:
     task_link = await get_agent_task(session, task_link_id)
     task = await session.get(Task, task_link.task_id)
@@ -491,6 +524,7 @@ async def add_message(
                 "role": role,
                 "parts": parts,
             },
+            redis_pool=redis_pool,
         )
     await session.refresh(message)
     return message
@@ -523,6 +557,7 @@ async def add_artifact(
     uri: str | None = None,
     created_by_agent_id: int | None = None,
     artifact_id: str | None = None,
+    redis_pool: ConnectionPool | None = None,
 ) -> AgentArtifact:
     task_link = await get_agent_task(session, task_link_id)
     task = await session.get(Task, task_link.task_id)
@@ -556,6 +591,7 @@ async def add_artifact(
             "name": name,
             "uri": uri,
         },
+        redis_pool=redis_pool,
     )
     await session.refresh(artifact)
     return artifact
